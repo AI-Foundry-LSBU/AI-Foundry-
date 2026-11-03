@@ -14,11 +14,11 @@ its starting point.
 - **Frontend:** React with Vite
 - **Backend:** Node.js with Express
 - **Database:** PostgreSQL
-- **API:** REST, documented in `openapi.yaml`
+- **API:** REST, documented in `docs/api/openapi.yaml`
 
 ## API contract
 
-The API contract is in [`openapi.yaml`](./openapi.yaml). It defines the
+The API contract is in [`docs/api/openapi.yaml`](docs/api/openapi.yaml). It defines the
 endpoints, request and response formats, user roles and expected
 behaviour for the frontend and backend.
 
@@ -34,7 +34,7 @@ http://localhost:3000/api/v1
 
 For the Sprint 1 demo, requests use the `X-User-Email` header to
 identify a seeded demo user. This is a temporary development
-arrangement, not production authentication. See `openapi.yaml` for the
+arrangement, not production authentication. See `docs/api/openapi.yaml` for the
 expected roles and API details.
 
 ## Repository guidance
