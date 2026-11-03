@@ -1,54 +1,38 @@
 # AI Foundry Opportunity Tracker
 
-A web application for LSBU staff to submit improvement opportunities to
-the AI Foundry. The Digital Project Manager can review and prioritise
-submissions, while the AI Foundry team can track approved work and its
-benefits.
+A web app for LSBU staff to submit requests for improving university processes. The Digital Project Manager can review and prioritise requests, while the AI Foundry team can track projects and their benefits.
 
-This project is being developed by a student team for the ICT Project
-Management module, using the AI Foundry Project Initiation Document as
-its starting point.
+Developed as part of the ICT Project Management module, using the AI Foundry Project Initiation Document (PID) as a reference.
 
-## Technology
+## Tech Stack
 
-- **Frontend:** React with Vite
-- **Backend:** Node.js with Express
+- **Frontend:** React + Vite
+- **Backend:** Node.js + Express
 - **Database:** PostgreSQL
-- **API:** REST, documented in `docs/api/openapi.yaml`
+- **API:** REST API
 
-## API contract
+## API
 
-The API contract is in [`docs/api/openapi.yaml`](docs/api/openapi.yaml). It defines the
-endpoints, request and response formats, user roles and expected
-behaviour for the frontend and backend.
+The API specification is available in [`docs/api/openapi.yaml`](https://github.com/AI-Foundry-LSBU/AI-Foundry-/blob/feature/backend/docs/api/openapi.yaml).
 
-Treat this file as the shared reference when implementing the API.
-Discuss proposed changes with the frontend and backend developers before
-changing it, then submit the change for review.
+It covers the endpoints, request and response formats, and user roles. Any changes to the API should be discussed with the frontend and backend developers to avoid issues when connecting everything.
 
-The local API base URL is:
+**Local API URL:**
 
-```text
+```
 http://localhost:3000/api/v1
 ```
 
-For the Sprint 1 demo, requests use the `X-User-Email` header to
-identify a seeded demo user. This is a temporary development
-arrangement, not production authentication. See `docs/api/openapi.yaml` for the
-expected roles and API details.
+For Sprint 1, the `X-User-Email` header is used to identify demo users. This is only for testing and will need to be replaced with proper authentication later.
 
-## Repository guidance
+## GitHub Guidelines
 
-- Keep frontend and backend work on separate feature branches.
-- Do not commit directly to `main`; use a pull request for review.
-- Include the user story or task ID in commit messages where relevant.
-- Do not commit `node_modules`, `.env` files, credentials or other
-  secrets.
-- Keep project documentation and sprint evidence in the repository's
-  documentation folders.
+- Use the assigned feature branches, not `main`.
+- Create a pull request before merging changes.
+- Include Jira task IDs in commit messages where possible.
+- Don't commit `node_modules`, `.env` files or sensitive information.
+- Keep documentation and sprint evidence in the relevant folders.
 
-## Running the project
+## Running Locally
 
-Local setup instructions will be added when the frontend and backend
-folders, environment variables and npm scripts are finalised. Check with
-the team before assuming a development command or configuration value.
+Setup instructions will be added once the frontend and backend configurations are ready.
