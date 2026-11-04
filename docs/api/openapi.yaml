@@ -1,0 +1,746 @@
+openapi: 3.0.3
+
+info:
+  title: AI Foundry Opportunity Tracker API
+  version: 0.1.0
+  description: |
+    API contract for the AI Foundry opportunity tracker.
+
+    This file is the single source of truth for the frontend and backend.
+    Change it through a pull request and let both sides review it before merging.
+
+    **Product backlog priorities:** US01-US07 are Must-have and US08 is
+    Should-have. MoSCoW priority describes the importance of a story for the
+    product and does not mean that every Must-have story must be completed in
+    Sprint 1.
+
+    **Sprint 1 scope:** US01 (submit) and US02 (view my opportunities) are in
+    scope. US03 (view all opportunities) is also a Must-have and is targeted
+    for Sprint 1 if capacity allows. If it is not completed in Sprint 1, it
+    remains in scope for a later sprint. US04-US08 are included here so the
+    frontend and backend can plan ahead, but are not committed to Sprint 1.
+
+    **Identifying users in Sprint 1:** full authentication is outside Sprint 1,
+    so every request sends an `X-User-Email` header. The server looks the
+    address up in the seeded demo users to find the person and their role.
+    This is for local/demo development only and must not be used in production.
+    It will be replaced by a bearer token in a later sprint.
+
+    **Roles:** `staff`, `manager` (Digital Project Manager) and `team`
+    (AI Foundry team member).
+
+    **Status lifecycle:**
+    `submitted` -> `in_assessment` -> `approved` or `rejected`;
+    `approved` -> `in_progress` -> `completed`.
+    Display labels on screen are: Submitted, In assessment, Approved,
+    Rejected, In progress, Completed.
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+tags:
+  - name: Opportunities
+    description: Submitting and viewing opportunities (US01, US02, US03)
+  - name: Assessment
+    description: Assessing, prioritising and deciding (US04, US05)
+  - name: Delivery
+    description: Updating project status (US06)
+  - name: Benefits
+    description: Recording benefits and the dashboard (US07, US08)
+
+security:
+  - demoUser: []
+
+paths:
+  /opportunities:
+    post:
+      tags: [Opportunities]
+      operationId: submitOpportunity
+      summary: Submit an opportunity (US01)
+      description: |
+        Saves a new opportunity with the initial status `submitted` and links
+        it to the user making the request. Staff submit with `source` left as
+        `staff_submission`. AI Foundry team members can record an idea from a
+        hackathon by sending `source: hackathon`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportunityCreate'
+            example:
+              title: Automate room booking confirmations
+              department: Estates
+              problemDescription: Confirmation emails are written and sent by hand for every booking.
+              proposedImprovement: Send confirmations automatically when a booking is approved.
+      responses:
+        '201':
+          description: Opportunity saved. Show the confirmation message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+              example:
+                id: opp_001
+                title: Automate room booking confirmations
+                department: Estates
+                problemDescription: Confirmation emails are written and sent by hand for every booking.
+                proposedImprovement: Send confirmations automatically when a booking is approved.
+                status: submitted
+                source: staff_submission
+                submittedBy:
+                  id: usr_001
+                  name: Demo Staff
+                submittedAt: '2026-11-02T10:15:00Z'
+                updatedAt: '2026-11-02T10:15:00Z'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      tags: [Opportunities]
+      operationId: listAllOpportunities
+      summary: View all opportunities (US03)
+      description: |
+        Returns every opportunity. Only `manager` and `team` users can call this.
+        Filters can be combined. Category and priority are set during
+        assessment, so they are empty on new submissions.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/Status'
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+        - name: priority
+          in: query
+          schema:
+            $ref: '#/components/schemas/Priority'
+        - name: department
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: A page of opportunities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpportunityPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /me/opportunities:
+    get:
+      tags: [Opportunities]
+      operationId: listMyOpportunities
+      summary: View my opportunities (US02)
+      description: |
+        Returns only the opportunities submitted by the user named in
+        `X-User-Email`. New submissions appear here straight away, with no
+        extra steps.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: A page of the user's own opportunities. The list can be empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpportunityPage'
+              example:
+                items:
+                  - id: opp_001
+                    title: Automate room booking confirmations
+                    department: Estates
+                    status: submitted
+                    submittedAt: '2026-11-02T10:15:00Z'
+                page: 1
+                pageSize: 20
+                total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+
+  /opportunities/{id}:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    get:
+      tags: [Opportunities]
+      operationId: getOpportunity
+      summary: View one opportunity in full (US02, US03)
+      description: |
+        Staff can only open their own opportunities. Managers and team
+        members can open any.
+      responses:
+        '200':
+          description: The full opportunity, including assessment and decision if they exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /opportunities/{id}/assessment:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    put:
+      tags: [Assessment]
+      operationId: assessOpportunity
+      summary: Assess and prioritise an opportunity (US04)
+      description: |
+        Manager only. Creates or replaces the assessment. Moves a `submitted`
+        opportunity to `in_assessment`. How the five scores combine into a
+        priority is still to be agreed, so for now the manager sets `priority`
+        directly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessmentInput'
+      responses:
+        '200':
+          description: Assessment saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /opportunities/{id}/decision:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    post:
+      tags: [Assessment]
+      operationId: decideOpportunity
+      summary: Approve or reject an opportunity (US05)
+      description: |
+        Manager only. The opportunity must be `in_assessment`, otherwise the
+        call returns 409. A reason is required when rejecting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionInput'
+      responses:
+        '200':
+          description: Decision recorded and status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /opportunities/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    patch:
+      tags: [Delivery]
+      operationId: updateStatus
+      summary: Update project status (US06)
+      description: |
+        Manager or team member. Only follows the lifecycle: `approved` to
+        `in_progress`, then `in_progress` to `completed`. Any other jump
+        returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [in_progress, completed]
+            example:
+              status: in_progress
+      responses:
+        '200':
+          description: Status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /opportunities/{id}/benefits:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    get:
+      tags: [Benefits]
+      operationId: listBenefits
+      summary: List benefits recorded for an opportunity (US07)
+      responses:
+        '200':
+          description: Benefits for this opportunity.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Benefit'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Benefits]
+      operationId: recordBenefit
+      summary: Record a benefit (US07)
+      description: Manager only. Benefits can be recorded at any point after approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BenefitInput'
+            example:
+              category: efficiency
+              description: Saves about two hours of admin per week.
+              value: 2
+              unit: hours per week
+              evidence: Timesheet sample from the Estates team.
+      responses:
+        '201':
+          description: Benefit recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Benefit'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /benefits/summary:
+    get:
+      tags: [Benefits]
+      operationId: getBenefitsSummary
+      summary: Benefits dashboard data (US08)
+      description: Manager only. Totals across all opportunities.
+      responses:
+        '200':
+          description: Overall impact figures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenefitsSummary'
+              example:
+                completedProjects: 3
+                totalBenefitsRecorded: 7
+                byCategory:
+                  - category: efficiency
+                    count: 4
+                  - category: financial
+                    count: 2
+                  - category: service
+                    count: 1
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    demoUser:
+      type: apiKey
+      in: header
+      name: X-User-Email
+      description: |
+        Sprint 1 only. Email of a seeded demo user, for example
+        staff@example.com. Replace with bearer tokens later.
+
+  parameters:
+    OpportunityId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: opp_001
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Sort:
+      name: sort
+      in: query
+      description: A leading minus means descending.
+      schema:
+        type: string
+        enum: [submittedAt, -submittedAt, priority, -priority]
+        default: -submittedAt
+
+  responses:
+    ValidationError:
+      description: One or more fields are missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: VALIDATION_ERROR
+            message: Some fields are missing or invalid.
+            fields:
+              title: Title is required.
+              department: Department is required.
+    Unauthorised:
+      description: No known user. Check the X-User-Email header.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNAUTHORISED
+            message: Unknown user.
+    Forbidden:
+      description: This user's role cannot do that.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: FORBIDDEN
+            message: You do not have permission to do that.
+    NotFound:
+      description: No opportunity with that id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: NOT_FOUND
+            message: Opportunity not found.
+    Conflict:
+      description: The opportunity is not in a status that allows this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: INVALID_STATUS
+            message: This opportunity cannot move to that status from its current one.
+
+  schemas:
+    Status:
+      type: string
+      enum: [submitted, in_assessment, approved, rejected, in_progress, completed]
+
+    Priority:
+      type: string
+      enum: [high, medium, low]
+
+    Category:
+      type: string
+      description: Placeholder list, to be agreed by the team.
+      enum: [automation, ai_assistant, reporting, process_improvement, other]
+
+    BenefitCategory:
+      type: string
+      enum: [efficiency, financial, service, risk_reduction, data, strategic]
+
+    Source:
+      type: string
+      enum: [staff_submission, hackathon]
+
+    UserRef:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    OpportunityCreate:
+      type: object
+      required: [title, department, problemDescription, proposedImprovement]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 150
+        department:
+          type: string
+          minLength: 1
+          maxLength: 100
+        problemDescription:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        proposedImprovement:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        source:
+          $ref: '#/components/schemas/Source'
+        hackathonName:
+          type: string
+          description: Only used when source is hackathon.
+
+    OpportunitySummary:
+      type: object
+      description: Used in lists.
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        category:
+          $ref: '#/components/schemas/Category'
+        submittedAt:
+          type: string
+          format: date-time
+
+    Opportunity:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        problemDescription:
+          type: string
+        proposedImprovement:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+        source:
+          $ref: '#/components/schemas/Source'
+        hackathonName:
+          type: string
+        submittedBy:
+          $ref: '#/components/schemas/UserRef'
+        submittedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        assessment:
+          $ref: '#/components/schemas/Assessment'
+        decision:
+          $ref: '#/components/schemas/Decision'
+
+    OpportunityPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpportunitySummary'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    AssessmentInput:
+      type: object
+      required:
+        - strategicAlignment
+        - benefitPotential
+        - complexity
+        - resourceRequirements
+        - speedToValue
+        - priority
+      properties:
+        strategicAlignment:
+          type: integer
+          minimum: 1
+          maximum: 5
+        benefitPotential:
+          type: integer
+          minimum: 1
+          maximum: 5
+        complexity:
+          type: integer
+          minimum: 1
+          maximum: 5
+        resourceRequirements:
+          type: integer
+          minimum: 1
+          maximum: 5
+        speedToValue:
+          type: integer
+          minimum: 1
+          maximum: 5
+        priority:
+          $ref: '#/components/schemas/Priority'
+        category:
+          $ref: '#/components/schemas/Category'
+        notes:
+          type: string
+          maxLength: 2000
+
+    Assessment:
+      allOf:
+        - $ref: '#/components/schemas/AssessmentInput'
+        - type: object
+          properties:
+            assessedBy:
+              $ref: '#/components/schemas/UserRef'
+            assessedAt:
+              type: string
+              format: date-time
+
+    DecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        reason:
+          type: string
+          maxLength: 2000
+          description: Required when the decision is rejected.
+      example:
+        decision: rejected
+        reason: Out of scope for this year.
+
+    Decision:
+      allOf:
+        - $ref: '#/components/schemas/DecisionInput'
+        - type: object
+          properties:
+            decidedBy:
+              $ref: '#/components/schemas/UserRef'
+            decidedAt:
+              type: string
+              format: date-time
+
+    BenefitInput:
+      type: object
+      required: [category, description]
+      properties:
+        category:
+          $ref: '#/components/schemas/BenefitCategory'
+        description:
+          type: string
+          maxLength: 2000
+        value:
+          type: number
+          description: Optional figure, for example hours saved or pounds.
+        unit:
+          type: string
+          description: What the value is measured in.
+        evidence:
+          type: string
+          maxLength: 2000
+
+    Benefit:
+      allOf:
+        - $ref: '#/components/schemas/BenefitInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            opportunityId:
+              type: string
+            recordedBy:
+              $ref: '#/components/schemas/UserRef'
+            recordedAt:
+              type: string
+              format: date-time
+
+    BenefitsSummary:
+      type: object
+      properties:
+        completedProjects:
+          type: integer
+        totalBenefitsRecorded:
+          type: integer
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                $ref: '#/components/schemas/BenefitCategory'
+              count:
+                type: integer
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code, for example VALIDATION_ERROR.
+        message:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+          description: Field name to message. Only on validation errors.
