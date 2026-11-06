@@ -38,10 +38,10 @@ export function SignInPage() {
       </div>
       <main className="login-artboard">
         <section className="login-story">
-          <span className="eyebrow">Ideas → projects → outcomes</span>
+          <span className="eyebrow">Opportunities → projects → outcomes</span>
           <h1>A shared space for making LSBU work better.</h1>
           <p>
-            AI Foundry brings improvement ideas, project delivery and measurable
+            AI Foundry brings opportunities, project delivery and measurable
             benefits into one connected workspace.
           </p>
           <div className="workflow-map" aria-label="AI Foundry workflow">
@@ -67,7 +67,7 @@ export function SignInPage() {
           </div>
           <div className="login-caption">
             <Network size={18} />
-            <span>From first idea to delivered benefit</span>
+            <span>From the first opportunity to a delivered benefit</span>
           </div>
         </section>
         <section className="sign-in-card login-panel">

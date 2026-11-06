@@ -118,7 +118,7 @@ function AppProvider({ children }) {
         {
           date: "Today",
           author: "Olivia Bennett",
-          text: `Project created from ${opportunity.id} and added to the delivery pipeline.`
+          text: `Project created from ${opportunity.id} and added to Project Delivery.`
         }
       ]
     };

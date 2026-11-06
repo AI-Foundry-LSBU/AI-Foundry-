@@ -143,7 +143,7 @@ export const initialProjects = [
       {
         date: "9 Jun 2025",
         author: "Olivia Bennett",
-        text: "Opportunity approved and added to the project pipeline."
+        text: "Opportunity approved and added to Project Delivery."
       }
     ]
   },

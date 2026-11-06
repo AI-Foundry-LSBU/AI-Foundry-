@@ -105,8 +105,7 @@ export function SubmitPage() {
       </div>;
   return <>
       <PageHeader
-    eyebrow="New request"
-    title="Suggest an Improvement"
+    title="Submit an Opportunity"
     subtitle="Tell us about a process or service that could be improved."
   />
       <form onSubmit={submit} noValidate>
@@ -206,7 +205,7 @@ export function SubmitPage() {
                 Cancel
               </Button>
               <Button type="submit" icon={Send}>
-                Submit Idea
+                Submit Opportunity
               </Button>
             </div>
           </div>

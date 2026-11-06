@@ -1833,3 +1833,223 @@ textarea,
 .modal-form textarea {
   height: 110px;
 }
+
+/* Keep the sign-in steps inside the left panel at every width. */
+.login-story {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.workflow-map {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
+.workflow-map > i {
+  flex: 1 1 12px;
+  min-width: 8px;
+}
+
+.workflow-node {
+  min-width: 0;
+}
+
+@container (max-width: 560px) {
+  .workflow-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+  }
+
+  .workflow-map > i {
+    display: none;
+  }
+
+  .workflow-node {
+    width: 100%;
+  }
+}
+
+/* Status filters wrap onto the next line instead of being clipped. */
+.opportunity-query {
+  min-width: 0;
+  overflow: visible;
+}
+
+.status-tabs {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 8px;
+}
+
+/* Dashboard tables stay inside the card. Text wraps, and narrow screens stack each row. */
+.fit-table {
+  overflow-x: visible;
+}
+
+.fit-table th,
+.fit-table td {
+  white-space: normal;
+}
+
+.fit-table .title-cell {
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .fit-table thead {
+    display: none;
+  }
+
+  .fit-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 6px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e0d9;
+  }
+
+  .fit-table td {
+    display: block;
+    grid-column: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .fit-table td:nth-child(1) {
+    grid-row: 1;
+  }
+
+  .fit-table td:last-child {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .fit-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+}
+
+th,
+.worklist-heading,
+.badge,
+.priority,
+.title-cell span,
+.mono,
+.card-header p,
+.stat-content small,
+.row-subject small,
+.row-owner small,
+.project-card-main > p,
+.card-progress > span,
+.kanban-title strong,
+.activity-item span,
+.filter-heading span,
+.axis-labels,
+.chart-legend,
+.benefit-highlight span,
+.project-progress span {
+  font-size: 13px;
+}
+
+.row-subject strong,
+.title-cell strong,
+button.project-progress strong {
+  color: #3459c4;
+}
+
+.opportunity-row:hover .row-subject strong,
+button.project-progress:hover strong,
+tr:hover .title-cell strong {
+  text-decoration: underline;
+}
+
+button.project-progress {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.opportunity-masthead {
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+}
+
+.worklist-heading,
+.opportunity-row {
+  grid-template-columns: 128px minmax(220px, 1.6fr) minmax(140px, .7fr) 96px 72px;
+}
+
+.query-selects {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.query-selects label,
+.filter-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: #4e5670;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.query-selects select,
+.filter-group select {
+  max-width: 240px;
+  font-size: 14px;
+}
+
+.rail-idea {
+  height: auto;
+  min-height: 72px;
+  padding-block: 8px;
+}
+
+.vertical-chart small {
+  max-width: 110px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+@media (max-width: 1100px) {
+  .opportunity-masthead {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .worklist-heading,
+  .opportunity-row {
+    grid-template-columns: 110px minmax(0, 1.4fr) minmax(120px, .7fr) 88px 64px;
+  }
+}
+
+@media (max-width: 768px) {
+  .opportunity-masthead,
+  .worklist-heading,
+  .opportunity-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opportunity-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .query-selects select,
+  .filter-group select {
+    width: 100%;
+    max-width: none;
+  }
+}

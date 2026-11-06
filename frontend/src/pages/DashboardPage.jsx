@@ -22,6 +22,12 @@ import {
   TableAction,
   formatCurrency
 } from "../components/ui";
+function hoursSaved(records) {
+  return records.filter((item) => item.unit === "Hours/month").reduce((sum, item) => sum + item.actual, 0);
+}
+function annualSavings(records) {
+  return records.filter((item) => item.unit === "GBP/year").reduce((sum, item) => sum + item.actual, 0);
+}
 
 function ManagerDashboard() {
   const { opportunities, projects, benefits } = useApp();
@@ -36,13 +42,15 @@ function ManagerDashboard() {
     value: opportunities.filter((item) => item.status === status).length
   }));
   const max = Math.max(...statusCounts.map((item) => item.value), 1);
-  const hours = benefits.filter((item) => item.unit === "Hours/month").reduce((sum, item) => sum + item.actual, 0);
-  const savings = benefits.filter((item) => item.unit === "GBP/year").reduce((sum, item) => sum + item.actual, 0);
+  const hours = hoursSaved(benefits);
+  const savings = annualSavings(benefits);
+  const submitted = opportunities.filter((item) => item.status === "Submitted").length;
+  const underReview = opportunities.filter((item) => item.status === "Under Review").length;
+  const activeProjects = projects.filter((item) => item.status !== "Completed");
   return <>
       <PageHeader
-    eyebrow="Management overview"
-    title="AI Foundry Dashboard"
-    subtitle="Manage improvement opportunities, monitor project delivery and track benefits."
+    title="Management Dashboard"
+    subtitle="Review opportunities, follow project delivery and track benefits."
     actions={<Button onClick={() => navigate("/opportunities")}>
             Review opportunities <ArrowRight size={16} />
           </Button>}
@@ -51,30 +59,28 @@ function ManagerDashboard() {
         <StatCard
     label="Total opportunities"
     value={opportunities.length}
-    detail="Current review portfolio"
+    detail="All opportunity records"
     icon={Network}
     tone="blue"
   />
         <StatCard
-    label="Awaiting review"
-    value={opportunities.filter(
-      (item) => item.status === "Submitted" || item.status === "Under Review"
-    ).length}
-    detail={`${opportunities.filter((item) => item.status === "Submitted").length} need initial triage`}
+    label="Under Review"
+    value={underReview}
+    detail={`${submitted} submitted`}
     icon={Clock3}
     tone="amber"
   />
         <StatCard
     label="Active projects"
-    value={projects.filter((item) => item.status !== "Completed").length}
-    detail={`Across ${new Set(projects.filter((item) => item.status !== "Completed").map((item) => item.department)).size} departments`}
+    value={activeProjects.length}
+    detail="Approved, planned and in progress"
     icon={FolderKanban}
     tone="violet"
   />
         <StatCard
     label="Completed projects"
     value={projects.filter((item) => item.status === "Completed").length}
-    detail="Delivery portfolio total"
+    detail="Marked completed"
     icon={CheckCircle2}
     tone="green"
   />
@@ -93,7 +99,7 @@ function ManagerDashboard() {
               View all <ArrowRight size={15} />
             </button>
           </div>
-          <div className="table-wrap">
+          <div className="table-wrap fit-table">
             <table>
               <thead>
                 <tr>
@@ -153,19 +159,24 @@ function ManagerDashboard() {
           <div className="card-header">
             <div>
               <h2>Project progress overview</h2>
-              <p>Delivery health across the active pipeline</p>
+              <p>Manual delivery estimate for each project</p>
             </div>
             <button
     className="text-button"
     onClick={() => navigate("/pipeline")}
   >
-              Open pipeline <ArrowRight size={15} />
+              Open Project Delivery <ArrowRight size={15} />
             </button>
           </div>
           <div className="project-overview">
             {projects.slice(0, 3).map((project) => {
     const progress = project.progress;
-    return <div className="project-progress" key={project.id}>
+    return <button
+      type="button"
+      className="project-progress"
+      key={project.id}
+      onClick={() => navigate(`/projects/${project.id}`)}
+    >
                   <div>
                     <strong>{project.title}</strong>
                     <span>
@@ -176,7 +187,7 @@ function ManagerDashboard() {
                     <i style={{ width: `${progress}%` }} />
                   </div>
                   <b>{progress}%</b>
-                </div>;
+                </button>;
   })}
           </div>
         </Card>
@@ -190,15 +201,15 @@ function ManagerDashboard() {
           <div className="benefit-highlight">
             <Clock3 size={20} />
             <div>
-              <strong>{hours}</strong>
-              <span>hours saved / month</span>
+              <strong>{hours} hours/month</strong>
+              <span>actual time saved</span>
             </div>
           </div>
           <div className="benefit-highlight">
             <CircleDollarSign size={20} />
             <div>
-              <strong>{formatCurrency(savings)}</strong>
-              <span>annual savings recorded</span>
+              <strong>{formatCurrency(savings)}/year</strong>
+              <span>actual financial savings</span>
             </div>
           </div>
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
@@ -217,32 +228,30 @@ function StaffDashboard() {
   );
   return <>
       <PageHeader
-    eyebrow="Staff portal"
-    title="My Dashboard"
-    subtitle="Track your improvement requests and submit new opportunities to the AI Foundry."
+    title="Dashboard"
+    subtitle="Track your opportunities and submit new ones to the AI Foundry."
     actions={<Button icon={Plus} onClick={() => navigate("/submit")}>
-            Submit an Idea
+            Submit Opportunity
           </Button>}
   />
       <div className="stats-grid three">
         <StatCard
     label="Total submissions"
     value={mine.length}
-    detail="All your opportunities"
     icon={Network}
     tone="blue"
   />
         <StatCard
-    label="Under review"
+    label="Under Review"
     value={mine.filter((item) => item.status === "Under Review").length}
-    detail={`${mine.filter((item) => item.status === "Submitted").length} awaiting initial review`}
+    detail={`${mine.filter((item) => item.status === "Submitted").length} submitted`}
     icon={Clock3}
     tone="amber"
   />
         <StatCard
     label="Approved"
     value={mine.filter((item) => item.status === "Approved").length}
-    detail="Moved into delivery"
+    detail="Approved for delivery"
     icon={CheckCircle2}
     tone="green"
   />
@@ -251,7 +260,7 @@ function StaffDashboard() {
         <div className="card-header">
           <div>
             <h2>Recent opportunities</h2>
-            <p>Your latest improvement requests and their current status</p>
+            <p>Your latest opportunities and their current status</p>
           </div>
           <button
     className="text-button"
@@ -260,7 +269,7 @@ function StaffDashboard() {
             View all <ArrowRight size={15} />
           </button>
         </div>
-        <div className="table-wrap">
+        <div className="table-wrap fit-table">
           <table>
             <thead>
               <tr>
@@ -301,47 +310,40 @@ function StaffDashboard() {
 function EngineerDashboard() {
   const { projects, benefits } = useApp();
   const navigate = useNavigate();
-  const active = projects.filter((item) => item.status === "In Progress");
-  const planned = projects.filter((item) => item.status === "Planned");
-  const completed = projects.filter((item) => item.status === "Completed");
-  const projectBenefits = benefits.filter(
-    (item) => projects.some((project) => project.id === item.projectId)
-  );
+  const countStatus = (status) => projects.filter((item) => item.status === status).length;
+  const hours = hoursSaved(benefits);
+  const savings = annualSavings(benefits);
   return <>
       <PageHeader
-    eyebrow="Engineer workspace"
-    title="Project Delivery Dashboard"
-    subtitle="View approved projects, record progress and keep delivery on track."
+    title="Delivery Dashboard"
+    subtitle="Follow approved projects from planning through to completion."
     actions={<Button onClick={() => navigate("/pipeline")}>
-            View Project Pipeline <ArrowRight size={16} />
+            Open Project Delivery <ArrowRight size={16} />
           </Button>}
   />
       <div className="stats-grid four">
         <StatCard
-    label="Approved projects"
-    value={projects.length}
-    detail="Current delivery portfolio"
+    label="Approved"
+    value={countStatus("Approved")}
+    detail="Not yet planned"
     icon={BriefcaseBusiness}
     tone="blue"
   />
         <StatCard
-    label="In progress"
-    value={active.length}
-    detail="Currently in delivery"
-    icon={Gauge}
-    tone="violet"
-  />
-        <StatCard
     label="Planned"
-    value={planned.length}
-    detail="Ready to begin"
+    value={countStatus("Planned")}
     icon={CalendarDays}
     tone="amber"
   />
         <StatCard
+    label="In Progress"
+    value={countStatus("In Progress")}
+    icon={Gauge}
+    tone="violet"
+  />
+        <StatCard
     label="Completed"
-    value={completed.length}
-    detail="Delivered projects"
+    value={countStatus("Completed")}
     icon={CheckCircle2}
     tone="green"
   />
@@ -350,8 +352,8 @@ function EngineerDashboard() {
         <Card className="span-2">
           <div className="card-header">
             <div>
-              <h2>Project Pipeline</h2>
-              <p>Approved delivery work and upcoming deadlines</p>
+              <h2>Project Delivery</h2>
+              <p>Approved projects and their target dates</p>
             </div>
             <button
     className="text-button"
@@ -360,7 +362,7 @@ function EngineerDashboard() {
               View all <ArrowRight size={15} />
             </button>
           </div>
-          <div className="table-wrap">
+          <div className="table-wrap fit-table">
             <table>
               <thead>
                 <tr>
@@ -403,10 +405,17 @@ function EngineerDashboard() {
             </div>
           </div>
           <div className="benefit-highlight">
+            <Clock3 size={20} />
+            <div>
+              <strong>{hours} hours/month</strong>
+              <span>actual time saved</span>
+            </div>
+          </div>
+          <div className="benefit-highlight">
             <BarChart3 size={20} />
             <div>
-              <strong>{projectBenefits.length}</strong>
-              <span>benefit measures recorded</span>
+              <strong>{formatCurrency(savings)}/year</strong>
+              <span>actual financial savings</span>
             </div>
           </div>
           <Button variant="secondary" onClick={() => navigate("/benefits")}>

@@ -112,7 +112,7 @@ export function OpportunityDetailPage() {
     );
     if (saved) {
       setMessage(
-        pendingDecision === "Approved" ? "Opportunity approved. It can now be moved to the Project Pipeline." : pendingDecision === "Rejected" ? "Opportunity rejected and retained in opportunity history." : "Opportunity kept under review."
+        pendingDecision === "Approved" ? "Opportunity approved. It can now be moved to Project Delivery." : pendingDecision === "Rejected" ? "Opportunity rejected and retained in the opportunity history." : "Opportunity kept under review."
       );
     }
     setPendingDecision(null);
@@ -126,7 +126,7 @@ export function OpportunityDetailPage() {
     );
     if (created) {
       setPipelineOpen(false);
-      setMessage(`${created.id} created in the Approved pipeline column.`);
+      setMessage(`${created.id} created in the Approved column.`);
     }
   };
   return <>
@@ -378,14 +378,14 @@ export function OpportunityDetailPage() {
                   </span>
                 </div>
                 <Button onClick={() => setPipelineOpen(true)}>
-                  Move to Project Pipeline
+                  Move to Project Delivery
                 </Button>
               </div>}
             {project && <div className="pipeline-action complete">
                 <div>
                   <strong>Linked project: {project.id}</strong>
                   <span>
-                    This opportunity is already in the Project Pipeline.
+                    This opportunity is already in Project Delivery.
                   </span>
                 </div>
                 <Button
@@ -428,7 +428,7 @@ export function OpportunityDetailPage() {
           </div>
         </Modal>}
       {pipelineOpen && <Modal
-    title="Move to Project Pipeline"
+    title="Move to Project Delivery"
     onClose={() => setPipelineOpen(false)}
   >
           <form className="modal-form" onSubmit={moveToPipeline}>
