@@ -24,53 +24,59 @@ export function OpportunitiesPage() {
   const [priority, setPriority] = useState("All");
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
-  const statusOptions = isEngineer ? ["All", "Approved"] : ["All", "Submitted", "Under Review", "Approved", "Rejected"];
-  const filtered = opportunities.filter((item) => {
+  const statusOptions = ["All", "Submitted", "Under Review", "Approved", "Rejected"];
+  const scoped = opportunities.filter((item) => {
     if (isStaff && item.submittedBy !== currentUser.name) return false;
     if (isEngineer && item.status !== "Approved") return false;
-    if (search && !`${item.id} ${item.title} ${item.department} ${item.submittedBy}`.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    if (status !== "All" && item.status !== status) return false;
-    if (department !== "All" && item.department !== department) return false;
-    if (priority !== "All" && item.priority !== priority) return false;
     return true;
   });
+  const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy}`.toLowerCase().includes(search.toLowerCase());
+  const matchesDepartment = (item) => department === "All" || item.department === department;
+  const matchesPriority = (item) => priority === "All" || item.priority === priority;
+  const narrowed = scoped.filter(
+    (item) => matchesSearch(item) && matchesDepartment(item) && matchesPriority(item)
+  );
+  const filtered = narrowed.filter(
+    (item) => isEngineer || status === "All" || item.status === status
+  );
+  const statusCount = (item) => narrowed.filter(
+    (opportunity) => item === "All" || opportunity.status === item
+  ).length;
   return <div className="opportunity-workspace">
       <section className="opportunity-masthead">
-        <div className="masthead-code">
-          OPP / {isStaff ? "MINE" : isEngineer ? "APPROVED" : "ALL"}
-        </div>
         <div className="masthead-copy">
-          <span className="eyebrow">
-            {isStaff ? "Staff opportunity record" : isEngineer ? "Approved opportunity record" : "University opportunity queue"}
-          </span>
           <h1>
             {isStaff ? "My Opportunities" : isEngineer ? "Approved Opportunities" : "All Opportunities"}
           </h1>
           <p>
-            {isStaff ? "A live record of your submitted ideas, review decisions and delivery progress." : isEngineer ? "View approved requests and the context behind project delivery." : "Assess, prioritise and progress improvement opportunities from across LSBU."}
+            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Approved opportunities and the context behind project delivery." : "Review, prioritise and progress opportunities from across LSBU."}
           </p>
         </div>
         <div className="masthead-ledger">
-          <div>
-            <strong>{filtered.length}</strong>
-            <span>In view</span>
-          </div>
-          <div>
-            <strong>
-              {filtered.filter((item) => item.status === "Under Review").length}
-            </strong>
-            <span>In review</span>
-          </div>
-          <div>
-            <strong>
-              {filtered.filter((item) => item.status === "Approved").length}
-            </strong>
-            <span>Approved</span>
-          </div>
+          {isEngineer ? <div>
+              <strong>{scoped.length}</strong>
+              <span>Approved opportunities</span>
+            </div> : <>
+              <div>
+                <strong>{scoped.length}</strong>
+                <span>{isStaff ? "Total submitted" : "Total opportunities"}</span>
+              </div>
+              <div>
+                <strong>
+                  {scoped.filter((item) => item.status === "Under Review").length}
+                </strong>
+                <span>Under Review</span>
+              </div>
+              <div>
+                <strong>
+                  {scoped.filter((item) => item.status === "Approved").length}
+                </strong>
+                <span>Approved</span>
+              </div>
+            </>}
         </div>
         {isStaff && <Button icon={Plus} onClick={() => navigate("/submit")}>
-            Submit an Idea
+            Submit Opportunity
           </Button>}
       </section>
 
@@ -82,58 +88,57 @@ export function OpportunitiesPage() {
     onChange={(event) => setSearch(event.target.value)}
     placeholder="Search title or opportunity ID"
   />
-          <span>⌘ K</span>
         </label>
-        <div className="status-tabs" aria-label="Filter by status">
+        {!isEngineer && <div className="status-tabs" aria-label="Filter by status">
           {statusOptions.map((item) => <button
     key={item}
     className={status === item ? "active" : ""}
     onClick={() => setStatus(item)}
   >
               {item}
-              <span>
-                {opportunities.filter(
-    (opportunity) => (!isStaff || opportunity.submittedBy === currentUser.name) && (item === "All" || opportunity.status === item)
-  ).length}
-              </span>
+              <span>{statusCount(item)}</span>
             </button>)}
-        </div>
+        </div>}
         {!isStaff && <div className="query-selects">
             <Filter size={15} />
-            <select
+            <label>
+              Department
+              <select
     value={department}
     onChange={(event) => setDepartment(event.target.value)}
+    aria-label="Department"
   >
-              <option>All</option>
-              {departments.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select
+                <option value="All">All departments</option>
+                {departments.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </label>
+            <label>
+              Priority
+              <select
     value={priority}
     onChange={(event) => setPriority(event.target.value)}
+    aria-label="Priority"
   >
-              <option>All</option>
-              {["High", "Medium", "Low", "Not set"].map((item) => <option key={item}>{item}</option>)}
-            </select>
+                <option value="All">All priorities</option>
+                {["High", "Medium", "Low", "Not set"].map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </label>
           </div>}
       </section>
 
       {filtered.length ? <section className="opportunity-worklist">
           <div className="worklist-heading">
-            <span>Index</span>
             <span>Status</span>
             <span>Opportunity</span>
             <span>{isStaff ? "Submitted" : "Owner"}</span>
             <span>Priority</span>
             <span />
           </div>
-          {filtered.map((item, index) => <button
+          {filtered.map((item) => <button
     className="opportunity-row"
     key={item.id}
     onClick={() => navigate(`/opportunities/${item.id}`)}
   >
-              <span className="row-index">
-                {String(index + 1).padStart(2, "0")}
-              </span>
               <span className="row-status">
                 <StatusBadge status={item.status} />
               </span>

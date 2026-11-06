@@ -16,7 +16,8 @@ import {
   Modal,
   PageHeader,
   StatCard,
-  formatCurrency
+  formatCurrency,
+  formatMeasure
 } from "../components/ui";
 
 export function BenefitsPage() {
@@ -75,18 +76,6 @@ export function BenefitsPage() {
   }));
   const timeBenefits = [...filteredBenefits].filter((item) => item.unit === "Hours/month").sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const maxTimeValue = Math.max(...timeBenefits.map((item) => item.actual), 1);
-  const chartPoints = timeBenefits.map((item, index) => {
-    const x = timeBenefits.length === 1 ? 300 : index / (timeBenefits.length - 1) * 600;
-    const y = 165 - item.actual / maxTimeValue * 120;
-    return {
-      x,
-      y,
-      label: item.date.split(" ").slice(0, 2).join(" "),
-      value: item.actual
-    };
-  });
-  const linePath = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
-  const areaPath = chartPoints.length ? `${linePath} L${chartPoints.at(-1)?.x},190 L${chartPoints[0].x},190 Z` : "";
   const save = (event) => {
     event.preventDefault();
     const data = {
@@ -143,9 +132,8 @@ export function BenefitsPage() {
   };
   return <>
       <PageHeader
-    eyebrow="Impact and value"
     title="Benefits Reporting"
-    subtitle="Measure and report the impact of AI Foundry projects."
+    subtitle="Recorded benefits for AI Foundry projects, with estimated and actual values kept separate."
     actions={role === "Digital Project Manager" ? <Button icon={Plus} onClick={() => openBenefitForm()}>
               Record Benefit
             </Button> : void 0}
@@ -160,15 +148,15 @@ export function BenefitsPage() {
   />
         <StatCard
     label="Actual hours saved"
-    value={`${hours} / mo`}
-    detail="From recorded benefit measures"
+    value={`${hours} hours/month`}
+    detail="Actual hours from recorded benefits"
     icon={Clock3}
     tone="violet"
   />
         <StatCard
     label="Financial savings"
-    value={formatCurrency(savings)}
-    detail="Annual actual saving"
+    value={`${formatCurrency(savings)}/year`}
+    detail="Actual annual saving"
     icon={CircleDollarSign}
     tone="green"
   />
@@ -190,18 +178,25 @@ export function BenefitsPage() {
             </div>
           </div>
           <div className="filter-group">
-            <select
+            <label>
+              Project
+              <select
     value={projectFilter}
     onChange={(event) => setProjectFilter(event.target.value)}
+    aria-label="Project"
   >
               <option value="All">All projects</option>
               {visibleProjects.map((item) => <option key={item.id} value={item.id}>
                   {item.title}
                 </option>)}
             </select>
-            <select
+            </label>
+            <label>
+              Category
+              <select
     value={categoryFilter}
     onChange={(event) => setCategoryFilter(event.target.value)}
+    aria-label="Category"
   >
               <option value="All">All categories</option>
               {[
@@ -213,13 +208,18 @@ export function BenefitsPage() {
     "Strategic"
   ].map((item) => <option key={item}>{item}</option>)}
             </select>
-            <select
+            </label>
+            <label>
+              Date
+              <select
     value={dateFilter}
     onChange={(event) => setDateFilter(event.target.value)}
+    aria-label="Date"
   >
               <option value="All">All dates</option>
               {dateOptions.map((item) => <option key={item}>{item}</option>)}
             </select>
+            </label>
           </div>
         </div>
       </Card>
@@ -242,31 +242,24 @@ export function BenefitsPage() {
         <Card>
           <div className="card-header">
             <div>
-              <h2>Benefits over time</h2>
-              <p>Recorded actual hours saved per month</p>
-            </div>
-            <span className="chart-legend">
-              <i /> Hours/month
-            </span>
-          </div>
-          <div className="line-chart">
-            <svg viewBox="0 0 600 190" preserveAspectRatio="none">
-              {areaPath && <path className="area" d={areaPath} />}
-              {linePath && <path className="line" d={linePath} />}
-              {chartPoints.map((point) => <circle
-    key={`${point.x}-${point.y}`}
-    cx={point.x}
-    cy={point.y}
-    r="5"
-    className="chart-point"
-  />)}
-            </svg>
-            <div className="axis-labels">
-              {chartPoints.length ? chartPoints.map((point) => <span key={`${point.label}-${point.value}`}>
-                    {point.label} · {point.value}
-                  </span>) : <span>No recorded hours for these filters</span>}
+              <h2>Recorded hours</h2>
+              <p>Each bar is one Hours/month benefit, not a running total</p>
             </div>
           </div>
+          {timeBenefits.length ? <div className="vertical-chart">
+              {timeBenefits.map((item) => <div key={item.id}>
+                  <span>{item.actual}</span>
+                  <i style={{ height: `${Math.max(item.actual / maxTimeValue * 110, 8)}px` }} />
+                  <small>
+                    {item.date.split(" ").slice(0, 2).join(" ")}
+                    <br />
+                    {item.actual} hours/month
+                  </small>
+                </div>)}
+            </div> : <EmptyState
+    title="No recorded hours for these filters"
+    text="Hours appear here when a benefit uses the Hours/month unit."
+  />}
         </Card>
       </div>
       <Card className="table-card">
@@ -276,7 +269,7 @@ export function BenefitsPage() {
             <p>Estimated and actual measures are shown separately by unit</p>
           </div>
         </div>
-        {filteredBenefits.length ? <div className="table-wrap">
+        {filteredBenefits.length ? <div className="table-wrap fit-table">
             <table>
               <thead>
                 <tr>
@@ -299,9 +292,9 @@ export function BenefitsPage() {
                       <span className="category-pill">{item.category}</span>
                     </td>
                     <td>{item.measurement}</td>
-                    <td>{item.estimated.toLocaleString()}</td>
+                    <td>{formatMeasure(item.estimated, item.unit)}</td>
                     <td>
-                      <strong>{item.actual.toLocaleString()}</strong>
+                      <strong>{formatMeasure(item.actual, item.unit)}</strong>
                     </td>
                     <td>{item.unit}</td>
                     <td>{item.date}</td>

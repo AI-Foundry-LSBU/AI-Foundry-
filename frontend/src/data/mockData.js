@@ -1,6 +1,20 @@
 // Sample LSBU opportunities, projects and benefits used until the backend is connected.
 export const initialOpportunities = [
   {
+    id: "OPP-2025-011",
+    title: "Printed Enrolment Packs",
+    department: "Student Services",
+    submittedBy: "Sarah Smith",
+    submittedDate: "4 Feb 2025",
+    status: "Rejected",
+    priority: "Low",
+    category: "Digital Improvement",
+    problem: "New students still receive a printed enrolment pack, and staff reprint missing pages by hand throughout welcome week.",
+    improvement: "Replace the printed pack with a personal online checklist that students can open before they arrive.",
+    expectedBenefits: "Less printing during welcome week and fewer missing pages to replace by hand.",
+    decisionReason: "Student communications is already redesigning the enrolment pack this year, so a separate build would duplicate that work."
+  },
+  {
     id: "OPP-2025-018",
     title: "Student Enquiry Automation",
     department: "Student Services",
@@ -143,7 +157,7 @@ export const initialProjects = [
       {
         date: "9 Jun 2025",
         author: "Olivia Bennett",
-        text: "Opportunity approved and added to the project pipeline."
+        text: "Opportunity approved and added to Project Delivery."
       }
     ]
   },

@@ -23,16 +23,15 @@ export function PipelinePage() {
   if (role === "Staff")
     return <EmptyState
       title="Access restricted"
-      text="The Project Pipeline is available to the AI Foundry delivery team."
+      text="Project Delivery is available to the AI Foundry delivery team."
       action={<Button onClick={() => navigate("/dashboard")}>
             Return to dashboard
           </Button>}
     />;
   return <>
       <PageHeader
-    eyebrow="Delivery portfolio"
-    title="Project Pipeline"
-    subtitle="Track approved AI Foundry projects through delivery."
+    title="Project Delivery"
+    subtitle="Track approved projects from planning to completion."
     actions={<div className="view-toggle">
             <button
       className={view === "kanban" ? "active" : ""}
@@ -74,14 +73,15 @@ export function PipelinePage() {
                           <div>
                             <i style={{ width: `${project.progress}%` }} />
                           </div>
-                          <span>{project.progress}%</span>
+                          <span>Manual estimate {project.progress}%</span>
                         </div>
                         <div className="project-card-meta">
                           <PriorityBadge priority={project.priority} />
-                          <span>{project.status}</span>
+                          <span>Target {project.targetDate}</span>
                         </div>
                       </button>
                       <select
+    aria-label={`Status for ${project.title}`}
     value={project.status}
     onChange={(event) => updateProject(
       project.id,
@@ -95,7 +95,7 @@ export function PipelinePage() {
               </div>
             </div>)}
         </div> : <Card>
-          <div className="table-wrap">
+          <div className="table-wrap fit-table">
             <table>
               <thead>
                 <tr>
@@ -103,7 +103,8 @@ export function PipelinePage() {
                   <th>Department</th>
                   <th>Priority</th>
                   <th>Status</th>
-                  <th>Progress</th>
+                  <th>Target date</th>
+                  <th>Manual estimate</th>
                   <th />
                 </tr>
               </thead>
@@ -125,6 +126,7 @@ export function PipelinePage() {
                     <td>
                       <StatusBadge status={project.status} />
                     </td>
+                    <td>{project.targetDate}</td>
                     <td>
                       <strong>{project.progress}%</strong>
                     </td>

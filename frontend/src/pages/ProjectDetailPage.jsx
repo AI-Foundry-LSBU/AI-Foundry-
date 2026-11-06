@@ -11,7 +11,8 @@ import {
   EmptyState,
   Field,
   PriorityBadge,
-  StatusBadge
+  StatusBadge,
+  formatMeasure
 } from "../components/ui";
 
 export function ProjectDetailPage() {
@@ -23,7 +24,7 @@ export function ProjectDetailPage() {
   if (!project)
     return <EmptyState
       title="Project not found"
-      text="Return to the pipeline to select another project."
+      text="Return to Project Delivery to select another project."
     />;
   const isRestricted = role === "Staff";
   if (isRestricted)
@@ -47,7 +48,7 @@ export function ProjectDetailPage() {
   };
   return <>
       <button className="back-link" onClick={() => navigate("/pipeline")}>
-        <ArrowLeft size={17} /> Back to project pipeline
+        <ArrowLeft size={17} /> Back to Project Delivery
       </button>
       <div className="detail-heading">
         <div>
@@ -128,7 +129,7 @@ export function ProjectDetailPage() {
                 {projectBenefits.length} recorded
               </span>
             </div>
-            {projectBenefits.length ? <div className="table-wrap">
+            {projectBenefits.length ? <div className="table-wrap fit-table">
                 <table>
                   <thead>
                     <tr>
@@ -147,9 +148,9 @@ export function ProjectDetailPage() {
                           </span>
                         </td>
                         <td>{benefit.measurement}</td>
-                        <td>{benefit.estimated.toLocaleString()}</td>
+                        <td>{formatMeasure(benefit.estimated, benefit.unit)}</td>
                         <td>
-                          <strong>{benefit.actual.toLocaleString()}</strong>
+                          <strong>{formatMeasure(benefit.actual, benefit.unit)}</strong>
                         </td>
                         <td>{benefit.unit}</td>
                       </tr>)}

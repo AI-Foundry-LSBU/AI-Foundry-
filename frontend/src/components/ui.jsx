@@ -18,14 +18,13 @@ function PageHeader({
 }) {
   return <div className="page-heading">
       <div className="page-heading-copy">
-        <div className="eyebrow">{eyebrow}</div>
+        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
         <h1>{title}</h1>
-        <p>{subtitle}</p>
+        {subtitle ? <p>{subtitle}</p> : null}
       </div>
-      <div className="page-heading-aside">
-        <span>AF / {eyebrow ?? "Workspace"}</span>
-        {actions && <div className="page-actions">{actions}</div>}
-      </div>
+      {actions ? <div className="page-heading-aside">
+          <div className="page-actions">{actions}</div>
+        </div> : null}
     </div>;
 }
 function Card({
@@ -65,7 +64,7 @@ function StatCard({
       <div className="stat-content">
         <span>{label}</span>
         <strong>{value}</strong>
-        <small>{detail}</small>
+        {detail ? <small>{detail}</small> : null}
       </div>
     </Card>;
 }
@@ -140,6 +139,15 @@ function formatCurrency(value) {
     maximumFractionDigits: 0
   }).format(value);
 }
+function formatMeasure(value, unit) {
+  const amount = Number(value).toLocaleString("en-GB");
+  if (unit === "GBP/year") return `${formatCurrency(value)}/year`;
+  if (unit === "Hours/month") return `${amount} hours/month`;
+  if (unit === "Percent") return `${amount}%`;
+  if (unit === "Days") return `${amount} days`;
+  if (unit === "Cases/month") return `${amount} cases/month`;
+  return unit ? `${amount} ${unit}` : amount;
+}
 export {
   Button,
   Card,
@@ -151,5 +159,6 @@ export {
   StatCard,
   StatusBadge,
   TableAction,
-  formatCurrency
+  formatCurrency,
+  formatMeasure
 };

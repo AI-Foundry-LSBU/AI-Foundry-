@@ -733,9 +733,8 @@ tbody tr:hover { background: #ebeade; }
 .masthead-ledger strong { font: 500 26px/1 'Newsreader', serif; }
 .masthead-ledger span { margin-top: 7px; color: var(--subtle); font-family: 'DM Mono', monospace; font-size: 6px; text-transform: uppercase; }
 .opportunity-query { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(400px, 1.3fr) auto; align-items: center; gap: 20px; padding: 11px 0; border-bottom: 1px solid var(--line-strong); }
-.work-search { height: 36px; display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 5px; }
+.work-search { height: 36px; display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 5px; }
 .work-search input { height: 100%; min-width: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font-size: 10px; }
-.work-search > span { padding: 3px 5px; color: var(--subtle); border: 1px solid var(--line); font-family: 'DM Mono', monospace; font-size: 6px; }
 .status-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; }
 .status-tabs button { height: 30px; padding: 0 9px; display: flex; align-items: center; gap: 6px; color: var(--muted); background: transparent; border: 0; border-bottom: 1px solid transparent; font-family: 'DM Mono', monospace; font-size: 7px; white-space: nowrap; text-transform: uppercase; }
 .status-tabs button > span { color: var(--subtle); }
@@ -1007,7 +1006,6 @@ td { padding: 14px; font-size: 14px; }
 .opportunity-query { grid-template-columns: minmax(240px, .75fr) minmax(430px, 1.25fr) auto; gap: 14px; padding: 12px 0; }
 .work-search { height: 42px; padding: 0 12px; background: #fff; border: 1px solid #cfd6e8; border-radius: 10px; }
 .work-search input { font-size: 14px; }
-.work-search > span { color: #77809c; background: #f1f3f9; border: 0; border-radius: 5px; font-family: 'Inter', sans-serif; font-size: 11px; }
 .status-tabs { gap: 4px; }
 .status-tabs button { height: 38px; padding: 0 10px; color: #64708c; border: 0; border-radius: 9px; font-family: 'Inter', sans-serif; font-size: 12px; text-transform: none; }
 .status-tabs button > span { padding: 2px 5px; background: #eceff7; border-radius: 999px; font-size: 11px; }
@@ -1832,4 +1830,317 @@ textarea,
 
 .modal-form textarea {
   height: 110px;
+}
+
+/* Keep the sign-in steps inside the left panel at every width. */
+.login-story {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.workflow-map {
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
+.workflow-map > i {
+  flex: 1 1 12px;
+  min-width: 8px;
+}
+
+.workflow-node {
+  min-width: 0;
+}
+
+@container (max-width: 560px) {
+  .workflow-map {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+  }
+
+  .workflow-map > i {
+    display: none;
+  }
+
+  .workflow-node {
+    width: 100%;
+  }
+}
+
+/* Status filters wrap onto the next line instead of being clipped. */
+.opportunity-query {
+  min-width: 0;
+  overflow: visible;
+}
+
+.status-tabs {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  overflow: visible;
+  row-gap: 8px;
+}
+
+/* Dashboard tables stay inside the card. Text wraps, and narrow screens stack each row. */
+.fit-table {
+  overflow-x: visible;
+}
+
+.fit-table th,
+.fit-table td {
+  white-space: normal;
+}
+
+.fit-table .title-cell {
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .fit-table thead {
+    display: none;
+  }
+
+  .fit-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 6px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e0d9;
+  }
+
+  .fit-table td {
+    display: block;
+    grid-column: 1;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .fit-table td:nth-child(1) {
+    grid-row: 1;
+  }
+
+  .fit-table td:last-child {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .fit-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+}
+
+th,
+.worklist-heading,
+.badge,
+.priority,
+.title-cell span,
+.mono,
+.card-header p,
+.stat-content small,
+.row-subject small,
+.row-owner small,
+.project-card-main > p,
+.card-progress > span,
+.kanban-title strong,
+.activity-item span,
+.filter-heading span,
+.axis-labels,
+.chart-legend,
+.benefit-highlight span,
+.project-progress span {
+  font-size: 13px;
+}
+
+.row-subject strong,
+.title-cell strong,
+button.project-progress strong {
+  color: #3459c4;
+}
+
+.opportunity-row:hover .row-subject strong,
+button.project-progress:hover strong,
+tr:hover .title-cell strong {
+  text-decoration: underline;
+}
+
+button.project-progress {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.opportunity-masthead {
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+}
+
+.worklist-heading,
+.opportunity-row {
+  grid-template-columns: 128px minmax(220px, 1.6fr) minmax(140px, .7fr) 96px 72px;
+}
+
+.query-selects {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.query-selects label,
+.filter-group label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: #4e5670;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.query-selects select,
+.filter-group select {
+  max-width: 240px;
+  font-size: 14px;
+}
+
+.rail-idea {
+  height: auto;
+  min-height: 72px;
+  padding-block: 8px;
+}
+
+.vertical-chart small {
+  max-width: 110px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+@media (max-width: 1100px) {
+  .opportunity-masthead {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .worklist-heading,
+  .opportunity-row {
+    grid-template-columns: 110px minmax(0, 1.4fr) minmax(120px, .7fr) 88px 64px;
+  }
+}
+
+@media (max-width: 768px) {
+  .opportunity-masthead,
+  .worklist-heading,
+  .opportunity-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opportunity-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .query-selects select,
+  .filter-group select {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.timeline-step.rejected::before { background: #e7a8b4; }
+.timeline-step.rejected > div,
+.timeline-step.rejected.complete > div,
+.timeline-step.rejected.current > div {
+  color: #fff;
+  background: #c4475d;
+  border-color: #c4475d;
+  box-shadow: 0 0 0 5px #fde5ea;
+}
+.timeline-step.rejected span,
+.timeline-step.rejected.current span { color: #a33c52; }
+
+.masthead-ledger {
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(3, 180px);
+  gap: 10px;
+}
+
+.masthead-ledger > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 96px;
+  padding: 16px 14px;
+}
+
+.masthead-ledger span {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+@media (max-width: 720px) {
+  .masthead-ledger {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .masthead-ledger > div {
+    align-items: center;
+    min-height: 84px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+
+  .masthead-ledger span {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .query-selects {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .query-selects label {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .query-selects select,
+  .filter-group select {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 140px;
+  z-index: 30;
+}
+
+.app-main {
+  padding-top: 68px;
+}
+
+@media (max-width: 1024px) {
+  .topbar { left: 0; }
+}
+
+@media (max-width: 560px) {
+  .app-main { padding-top: 64px; }
 }

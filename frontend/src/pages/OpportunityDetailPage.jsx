@@ -2,7 +2,8 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
@@ -77,8 +78,14 @@ export function OpportunityDetailPage() {
             Return to dashboard
           </Button>}
     />;
-  const stages = ["Submitted", "Under Review", "Approved"];
-  const currentIndex = stages.indexOf(opportunity.status);
+  const rejected = opportunity.status === "Rejected";
+  const pending = opportunity.status === "Submitted" || opportunity.status === "Under Review";
+  const stages = pending
+    ? ["Submitted", "Under Review", "Decision"]
+    : rejected
+      ? ["Submitted", "Under Review", "Rejected"]
+      : ["Submitted", "Under Review", "Approved", "In Progress", "Completed"];
+  const currentIndex = stages.indexOf(pending ? opportunity.status : rejected ? "Rejected" : "Approved");
   const criterionGuidance = {
     "Strategic alignment": "1 = limited connection to LSBU priorities \xB7 5 = directly advances a key priority",
     "Benefit potential": "1 = limited or uncertain benefit \xB7 5 = substantial, measurable benefit",
@@ -112,7 +119,7 @@ export function OpportunityDetailPage() {
     );
     if (saved) {
       setMessage(
-        pendingDecision === "Approved" ? "Opportunity approved. It can now be moved to the Project Pipeline." : pendingDecision === "Rejected" ? "Opportunity rejected and retained in opportunity history." : "Opportunity kept under review."
+        pendingDecision === "Approved" ? "Opportunity approved. It can now be moved to Project Delivery." : pendingDecision === "Rejected" ? "Opportunity rejected and retained in the opportunity history." : "Opportunity kept under review."
       );
     }
     setPendingDecision(null);
@@ -126,7 +133,7 @@ export function OpportunityDetailPage() {
     );
     if (created) {
       setPipelineOpen(false);
-      setMessage(`${created.id} created in the Approved pipeline column.`);
+      setMessage(`${created.id} created in the Approved column.`);
     }
   };
   return <>
@@ -159,29 +166,21 @@ export function OpportunityDetailPage() {
           <div>
             <h2>Opportunity progress</h2>
             <p>
-              {opportunity.status === "Rejected" ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
+              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
             </p>
           </div>
         </div>
-        {opportunity.status === "Rejected" ? <div className="rejected-state">
-            <span>
-              <Check size={16} />
-            </span>
-            <div>
-              <strong>Submitted and assessed</strong>
-              <p>Decision: Rejected</p>
-            </div>
-          </div> : <div className="timeline">
+        <div className="timeline">
             {stages.map((stage, index) => <div
-    className={`timeline-step ${index <= currentIndex ? "complete" : ""} ${index === currentIndex ? "current" : ""}`}
+    className={`timeline-step ${index <= currentIndex ? "complete" : ""} ${index === currentIndex ? "current" : ""} ${stage === "Rejected" ? "rejected" : ""}`}
     key={stage}
   >
                 <div>
-                  <Check size={14} />
+                  {stage === "Rejected" ? <X size={14} /> : <Check size={14} />}
                 </div>
                 <span>{stage}</span>
               </div>)}
-          </div>}
+          </div>
       </Card>
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
@@ -378,14 +377,14 @@ export function OpportunityDetailPage() {
                   </span>
                 </div>
                 <Button onClick={() => setPipelineOpen(true)}>
-                  Move to Project Pipeline
+                  Move to Project Delivery
                 </Button>
               </div>}
             {project && <div className="pipeline-action complete">
                 <div>
                   <strong>Linked project: {project.id}</strong>
                   <span>
-                    This opportunity is already in the Project Pipeline.
+                    This opportunity is already in Project Delivery.
                   </span>
                 </div>
                 <Button
@@ -428,7 +427,7 @@ export function OpportunityDetailPage() {
           </div>
         </Modal>}
       {pipelineOpen && <Modal
-    title="Move to Project Pipeline"
+    title="Move to Project Delivery"
     onClose={() => setPipelineOpen(false)}
   >
           <form className="modal-form" onSubmit={moveToPipeline}>

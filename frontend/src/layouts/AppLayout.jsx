@@ -24,29 +24,40 @@ import { useState } from "react";
 import { useApp } from "../context/AppContext";
 const staffNav = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/submit", label: "Submit an Idea", icon: PlusCircle },
+  { to: "/submit", label: "Submit Opportunity", icon: PlusCircle },
   { to: "/opportunities", label: "My Opportunities", icon: ClipboardList }
 ];
 const managementNav = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
+  { to: "/dashboard", label: "Management Dashboard", icon: Gauge },
   { to: "/opportunities", label: "All Opportunities", icon: ClipboardList },
-  { to: "/pipeline", label: "Project Pipeline", icon: BriefcaseBusiness },
+  { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
   { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
 const engineerNav = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/pipeline", label: "Project Pipeline", icon: BriefcaseBusiness },
-  { to: "/opportunities", label: "Opportunities", icon: ClipboardList },
-  { to: "/benefits", label: "Benefits", icon: BarChart3 }
+  { to: "/dashboard", label: "Delivery Dashboard", icon: Gauge },
+  { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
+  { to: "/opportunities", label: "Approved Opportunities", icon: ClipboardList },
+  { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
-const pageNames = {
-  dashboard: "Dashboard",
-  submit: "Suggest an Improvement",
-  opportunities: "Opportunities",
-  pipeline: "Project Pipeline",
-  projects: "Project Details",
-  benefits: "Benefits Reporting"
-};
+function pageTitle(pathname, role) {
+  const [section, id] = pathname.split("/").filter(Boolean);
+  if (section === "dashboard") {
+    if (role === "Digital Project Manager") return "Management Dashboard";
+    if (role === "AI Foundry Engineer") return "Delivery Dashboard";
+    return "Dashboard";
+  }
+  if (section === "submit") return "Submit an Opportunity";
+  if (section === "opportunities") {
+    if (id) return "Opportunity";
+    if (role === "Staff") return "My Opportunities";
+    if (role === "AI Foundry Engineer") return "Approved Opportunities";
+    return "All Opportunities";
+  }
+  if (section === "pipeline") return "Project Delivery";
+  if (section === "projects") return "Project Details";
+  if (section === "benefits") return "Benefits Reporting";
+  return "AI Foundry";
+}
 function Layout() {
   const { isAuthenticated, currentUser, signOut, role, setRole } = useApp();
   const navigate = useNavigate();
@@ -56,8 +67,7 @@ function Layout() {
   const isEngineer = role === "AI Foundry Engineer";
   const nav = isStaff ? staffNav : isEngineer ? engineerNav : managementNav;
   const user = role === "Staff" ? currentUser : role === "Digital Project Manager" ? { name: "Olivia Bennett", initials: "OB", team: "AI Foundry" } : { name: "Alex Morgan", initials: "AM", team: "AI Foundry" };
-  const pageKey = location.pathname.split("/")[1];
-  const currentTitle = pageNames[pageKey] ?? "AI Foundry";
+  const currentTitle = pageTitle(location.pathname, role);
   const changeRole = (nextRole) => {
     setRole(nextRole);
     setMobileOpen(false);
@@ -97,11 +107,11 @@ function Layout() {
         {isStaff && <button
     className="rail-idea"
     onClick={() => navigate("/submit")}
-    title="Submit an idea"
-    aria-label="Submit an idea"
+    title="Submit Opportunity"
+    aria-label="Submit Opportunity"
   >
             <Lightbulb size={18} />
-            <span>Submit an idea</span>
+            <span>Submit Opportunity</span>
           </button>}
         <div className="sidebar-footer rail-footer">
           <PanelLeftClose size={17} />
