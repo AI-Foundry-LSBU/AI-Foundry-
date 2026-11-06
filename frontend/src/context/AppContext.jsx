@@ -11,52 +11,43 @@ import {
 } from "../data/mockData";
 
 const AppContext = createContext(null);
+const demoEmailKey = "ai-foundry.demoEmail";
+const demoStaffNames = {
+  "staff@example.com": "Demo Staff",
+  "staff2@example.com": "Second Demo Staff",
+};
+
+function demoUser(email) {
+  const localPart = email.split("@")[0] || "sarah.smith";
+  const name = localPart.split(/[._-]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  const resolvedName = demoStaffNames[email] ?? (name || "Sarah Smith");
+  return {
+    name: resolvedName,
+    email,
+    initials: resolvedName.split(" ").map((part) => part[0]).join("").slice(0, 2),
+    team: resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
+  };
+}
+
 function AppProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState({
-    name: "Sarah Smith",
-    email: "sarah.smith@lsbu.ac.uk",
-    initials: "SS",
-    team: "Student Services"
+  const [currentUser, setCurrentUser] = useState(() => {
+    const email = sessionStorage.getItem(demoEmailKey);
+    return email ? demoUser(email) : null;
   });
   const [role, setRole] = useState("Staff");
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [projects, setProjects] = useState(initialProjects);
   const [benefits, setBenefits] = useState(initialBenefits);
   const signIn = (email) => {
-    const localPart = email.split("@")[0] || "sarah.smith";
-    const name = localPart.split(/[._-]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-    const resolvedName = name || "Sarah Smith";
-    setCurrentUser({
-      name: resolvedName,
-      email,
-      initials: resolvedName.split(" ").map((part) => part[0]).join("").slice(0, 2),
-      team: resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
-    });
+    const normalizedEmail = email.trim().toLowerCase();
+    sessionStorage.setItem(demoEmailKey, normalizedEmail);
+    setCurrentUser(demoUser(normalizedEmail));
     setRole("Staff");
-    setIsAuthenticated(true);
   };
   const signOut = () => {
+    sessionStorage.removeItem(demoEmailKey);
+    setCurrentUser(null);
     setRole("Staff");
-    setIsAuthenticated(false);
-  };
-  const addOpportunity = (data) => {
-    if (role === "AI Foundry Engineer") return null;
-    const next = 27 + opportunities.filter((item) => Number(item.id.split("-").at(-1)) >= 27).length;
-    const opportunity = {
-      ...data,
-      id: `OPP-2025-${String(next).padStart(3, "0")}`,
-      submittedBy: data.submittedBy ?? currentUser.name,
-      submittedDate: ( new Date()).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric"
-      }),
-      status: "Submitted",
-      priority: "Not set"
-    };
-    setOpportunities((current) => [opportunity, ...current]);
-    return opportunity;
   };
   const assessOpportunity = (id, priority, assessment, comments, category) => {
     if (role !== "Digital Project Manager") return false;
@@ -176,7 +167,7 @@ function AppProvider({ children }) {
   };
   const value = useMemo(
     () => ({
-      isAuthenticated,
+      isAuthenticated: Boolean(currentUser),
       currentUser,
       signIn,
       signOut,
@@ -185,7 +176,6 @@ function AppProvider({ children }) {
       opportunities,
       projects,
       benefits,
-      addOpportunity,
       assessOpportunity,
       decideOpportunity,
       createProject,
@@ -193,7 +183,7 @@ function AppProvider({ children }) {
       addBenefit,
       updateBenefit
     }),
-    [isAuthenticated, currentUser, role, opportunities, projects, benefits]
+    [currentUser, role, opportunities, projects, benefits]
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -14,13 +14,13 @@ import {
 export function SignInPage() {
   const { isAuthenticated, signIn } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("sarah.smith@lsbu.ac.uk");
+  const [email, setEmail] = useState("staff@example.com");
   const [error, setError] = useState("");
   if (isAuthenticated) return <Navigate to="/opportunities" replace />;
   const submit = (event) => {
     event.preventDefault();
     if (!email.trim() || !email.includes("@")) {
-      setError("Enter a valid LSBU email address.");
+      setError("Enter a valid demo email address.");
       return;
     }
     signIn(email.trim());
@@ -78,14 +78,14 @@ export function SignInPage() {
           </div>
           <h2>Sign in to AI Foundry</h2>
           <p>
-            Use your university account to view your submitted opportunities.
+            Use a seeded staff demo account to view your submitted opportunities.
           </p>
           <form onSubmit={submit}>
             <Field
-    label="University email"
+    label="Demo email"
     required
     error={error}
-    helper="Enter your university email address."
+    helper="Use staff@example.com or staff2@example.com."
   >
               <div className="input-with-icon">
                 <Mail size={16} />
@@ -96,7 +96,7 @@ export function SignInPage() {
       setEmail(event.target.value);
       setError("");
     }}
-    placeholder="name@lsbu.ac.uk"
+    placeholder="staff@example.com"
   />
               </div>
             </Field>

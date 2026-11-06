@@ -105,9 +105,9 @@ curl -i -H 'X-User-Email: staff@example.com' http://127.0.0.1:3000/api/v1/opport
 
 For the automated checks, run `npm test` from `backend/` while PostgreSQL is running. The example `.env` includes `TEST_DATABASE_URL`. The tests create and remove their own schema, separate from your demo requests.
 
-## Run the website separately
+## Check the Sprint 1 workflow in the browser
 
-From the project folder, open a new terminal window and run:
+Keep PostgreSQL and the backend running. Open a second terminal in the project folder and run:
 
 ```bash
 cd frontend
@@ -115,7 +115,14 @@ npm ci
 npm run dev
 ```
 
-Run `npm ci` the first time or after a dependency change. Open the **Local** address printed by Vite. The React website still uses sample data. Connecting the submission form and **My Opportunities** page to the API is the remaining integration work.
+Run `npm ci` the first time or after a dependency change. Open the **Local** address printed by Vite.
+
+1. Sign in with `staff@example.com`.
+2. Open **Submit Opportunity**, fill in the form, and submit it. The reference on the confirmation screen is the ID of the saved database row.
+3. Open **My Opportunities**, refresh the page, and open the saved request. Check that its reference and details match the submission.
+4. To check access, copy the detail URL, sign out, and sign in with `staff2@example.com`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
+
+Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and dashboard use the API. The manager and engineer views still use sample data.
 
 ## Files to share
 
