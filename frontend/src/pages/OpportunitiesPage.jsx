@@ -95,7 +95,6 @@ export function OpportunitiesPage() {
     onChange={(event) => setSearch(event.target.value)}
     placeholder="Search title or opportunity ID"
   />
-          <span>⌘ K</span>
         </label>
         {!isEngineer && <div className="status-tabs" aria-label="Filter by status">
           {statusOptions.map((item) => <button
