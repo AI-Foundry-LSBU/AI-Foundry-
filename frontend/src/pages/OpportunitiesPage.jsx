@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { departments } from "../data/options";
+import { departments, opportunityStatuses } from "../data/options";
+import { useStaffOpportunities } from "../data/useStaffOpportunities";
 import {
   Button,
   EmptyState,
@@ -24,13 +25,19 @@ export function OpportunitiesPage() {
   const [priority, setPriority] = useState("All");
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
-  const statusOptions = ["All", "Submitted", "Under Review", "Approved", "Rejected"];
-  const scoped = opportunities.filter((item) => {
-    if (isStaff && item.submittedBy !== currentUser.name) return false;
-    if (isEngineer && item.status !== "Approved") return false;
-    return true;
-  });
-  const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy}`.toLowerCase().includes(search.toLowerCase());
+  const staff = useStaffOpportunities(isStaff ? currentUser.email : null);
+  if (staff.loading) return <div role="status"><EmptyState title="Loading your opportunities…" /></div>;
+  if (staff.error) return <div role="alert">
+      <EmptyState
+        title="Could not load your opportunities"
+        text={staff.error.message}
+        action={<Button onClick={staff.retry}>Try again</Button>}
+      />
+    </div>;
+
+  const statusOptions = ["All", ...opportunityStatuses, ...(isStaff ? ["In Progress", "Completed"] : [])];
+  const scoped = isStaff ? staff.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
+  const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(search.toLowerCase());
   const matchesDepartment = (item) => department === "All" || item.department === department;
   const matchesPriority = (item) => priority === "All" || item.priority === priority;
   const narrowed = scoped.filter(
@@ -161,8 +168,8 @@ export function OpportunitiesPage() {
             </button>)}
         </section> : <div className="worklist-empty">
           <EmptyState
-    title="No opportunities in this view"
-    text="Adjust the search or filters to return to the opportunity queue."
+    title={isStaff && !scoped.length ? "No opportunities yet" : "No opportunities in this view"}
+    text={isStaff && !scoped.length ? "Submit an opportunity and it will appear here." : "Adjust the search or filters to return to the opportunity queue."}
   />
         </div>}
     </div>;

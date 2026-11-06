@@ -13,9 +13,11 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { useStaffOpportunities } from "../data/useStaffOpportunities";
 import {
   Button,
   Card,
+  EmptyState,
   PageHeader,
   StatCard,
   StatusBadge,
@@ -221,11 +223,13 @@ function ManagerDashboard() {
 }
 
 function StaffDashboard() {
-  const { currentUser, opportunities } = useApp();
+  const { currentUser } = useApp();
   const navigate = useNavigate();
-  const mine = opportunities.filter(
-    (item) => item.submittedBy === currentUser.name
-  );
+  const { data: mine, loading, error, retry } = useStaffOpportunities(currentUser.email);
+  if (loading) return <div role="status"><EmptyState title="Loading your opportunities…" /></div>;
+  if (error) return <div role="alert">
+      <EmptyState title="Could not load your dashboard" text={error.message} action={<Button onClick={retry}>Try again</Button>} />
+    </div>;
   return <>
       <PageHeader
     title="Dashboard"

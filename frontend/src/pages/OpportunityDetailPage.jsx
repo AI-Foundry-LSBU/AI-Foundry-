@@ -7,6 +7,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
+import { useStaffOpportunities } from "../data/useStaffOpportunities";
 import {
   Button,
   Card,
@@ -29,7 +30,9 @@ export function OpportunityDetailPage() {
     createProject
   } = useApp();
   const navigate = useNavigate();
-  const opportunity = opportunities.find((item) => item.id === id);
+  const isStaff = role === "Staff";
+  const staff = useStaffOpportunities(isStaff ? currentUser.email : null, id);
+  const opportunity = isStaff ? staff.data : opportunities.find((item) => item.id === id);
   const [priority, setPriority] = useState(
     opportunity?.priority ?? "Not set"
   );
@@ -56,6 +59,19 @@ export function OpportunityDetailPage() {
     startDate: "",
     targetDate: ""
   });
+  if (staff.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
+  if (staff.error && staff.error.status !== 404) {
+    const forbidden = staff.error.status === 403;
+    return <div role="alert">
+        <EmptyState
+          title={forbidden ? "Access restricted" : "Could not load this opportunity"}
+          text={staff.error.message}
+          action={forbidden
+            ? <Button onClick={() => navigate("/opportunities")}>Back to opportunities</Button>
+            : <Button onClick={staff.retry}>Try again</Button>}
+        />
+      </div>;
+  }
   if (!opportunity)
     return <EmptyState
       title="Opportunity not found"
@@ -64,11 +80,10 @@ export function OpportunityDetailPage() {
             Back to opportunities
           </Button>}
     />;
-  const isStaff = role === "Staff";
   const isManager = role === "Digital Project Manager";
   const isEngineer = role === "AI Foundry Engineer";
   const project = projects.find((item) => item.opportunityId === opportunity.id);
-  const isRestricted = isStaff && opportunity.submittedBy !== currentUser.name || isEngineer && opportunity.status !== "Approved";
+  const isRestricted = isEngineer && opportunity.status !== "Approved";
   if (isRestricted)
     return <EmptyState
       title="Access restricted"
@@ -77,7 +92,7 @@ export function OpportunityDetailPage() {
             Return to dashboard
           </Button>}
     />;
-  const stages = ["Submitted", "Under Review", "Approved"];
+  const stages = ["Submitted", "Under Review", "Approved", ...(isStaff ? ["In Progress", "Completed"] : [])];
   const currentIndex = stages.indexOf(opportunity.status);
   const criterionGuidance = {
     "Strategic alignment": "1 = limited connection to LSBU priorities \xB7 5 = directly advances a key priority",
