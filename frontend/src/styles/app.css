@@ -341,23 +341,6 @@ td strong { color: var(--ink); font-weight: 600; }
 .modal-grid .field:nth-child(3), .modal-grid .field:nth-child(4) { grid-column: 1 / -1; }
 .modal-grid .field:has(textarea) { grid-column: 1 / -1; }
 .modal-actions { margin-top: 24px; display: flex; justify-content: flex-end; gap: 9px; }
-.hackathon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.hackathon-card { padding: 20px; display: flex; flex-direction: column; }
-.hackathon-top { margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; }
-.hackathon-icon { width: 40px; height: 40px; display: grid; place-items: center; color: var(--violet); background: var(--violet-bg); border-radius: 10px; }
-.hackathon-card h2 { font-size: 15px; }
-.hackathon-card > p { min-height: 52px; margin: 7px 0 16px; color: var(--muted); font-size: 11px; line-height: 1.55; }
-.hackathon-meta { padding: 12px 0; display: flex; flex-wrap: wrap; gap: 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.hackathon-meta span { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9px; }
-.idea-list { margin: 13px 0; }
-.idea-list > div { padding: 8px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid #eef1f5; }
-.idea-list span { font-size: 9px; }
-.idea-list button { padding: 0; color: var(--blue-600); background: none; border: 0; font-size: 8px; font-weight: 700; }
-.hackathon-card > .button { width: 100%; margin-top: auto; }
-.hackathon-add { margin: 10px auto 0; justify-content: center; }
-.detail-candidate-list { margin-top: 16px; border-top: 1px solid var(--line); }
-.detail-candidate-list > div:not(.empty-state) { padding: 11px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
-.detail-candidate-list > div > span { font-size: 10px; font-weight: 600; }
 .sign-in-shell { min-height: 100vh; padding: 30px clamp(24px, 5vw, 76px); background: linear-gradient(135deg, #f7f9fc 0%, #eef3fa 100%); }
 .sign-in-brand { height: 50px; display: flex; align-items: center; gap: 12px; }
 .sign-in-brand .brand-mark { width: 42px; height: 42px; }
@@ -556,10 +539,6 @@ td strong { font-weight: 600; }
 .modal-header h2 { font-size: 21px; }
 .icon-button { background: transparent; border: 1px solid var(--line); border-radius: 2px; }
 .decision-preview, .modal-context { background: #f2efe9; border-radius: 2px; }
-.hackathon-grid { gap: 12px; }
-.hackathon-card { padding: 18px; border-top: 2px solid var(--violet); }
-.hackathon-icon { color: var(--violet); background: transparent; border: 1px solid var(--violet); border-radius: 2px; }
-.hackathon-card h2 { font-size: 18px; }
 
 .sign-in-shell { background: var(--canvas); }
 .sign-in-brand .brand-mark::after { border-color: var(--canvas); }
@@ -578,7 +557,6 @@ td strong { font-weight: 600; }
 @media (max-width: 1180px) {
   .stats-grid.four { grid-template-columns: repeat(2, 1fr); }
   .kanban { grid-template-columns: repeat(4, 250px); }
-  .hackathon-grid { grid-template-columns: repeat(2, 1fr); }
   .detail-grid.management, .project-detail-grid { grid-template-columns: 1fr; }
 }
 
@@ -617,7 +595,6 @@ td strong { font-weight: 600; }
   .meta-grid { grid-template-columns: repeat(2, 1fr); }
   .timeline { padding-inline: 15px; }
   .timeline-step span { font-size: 7px; }
-  .hackathon-grid { grid-template-columns: 1fr; }
   .success-card { padding: 30px 20px; }
   .success-actions { flex-direction: column; }
   .callout-card { align-items: flex-start; flex-wrap: wrap; }
@@ -816,10 +793,6 @@ tbody tr:hover { background: #ebeade; }
 .benefits-charts { grid-template-columns: .72fr 1.28fr; gap: 24px; }
 .benefits-charts > .card { border-top: 1px solid var(--ink); }
 .vertical-chart, .line-chart { background-color: transparent; }
-.hackathon-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.hackathon-card { min-height: 330px; padding: 16px; background: transparent; border: 1px solid var(--line-strong); border-top: 3px solid var(--ink); }
-.hackathon-card:first-child { grid-column: span 2; }
-.hackathon-card h2 { font: 500 23px/1.05 'Newsreader', serif; }
 
 .modal { border: 1px solid var(--ink); }
 .sign-in-shell { padding: 0; background: #f2f1e9; }
@@ -843,7 +816,6 @@ tbody tr:hover { background: #ebeade; }
   .masthead-ledger { grid-column: 3; grid-row: 1 / 3; }
   .opportunity-query { grid-template-columns: 1fr; gap: 6px; }
   .worklist-heading, .opportunity-row { grid-template-columns: 42px 90px minmax(220px, 1.5fr) minmax(120px, .7fr) 65px 48px; }
-  .hackathon-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 900px) {
@@ -899,8 +871,6 @@ tbody tr:hover { background: #ebeade; }
   .opportunity-row .table-action { grid-column: 3; grid-row: 1 / 3; }
   .form-grid { padding-inline: 0; grid-template-columns: 1fr; }
   .form-footer { padding-inline: 0; background: transparent; }
-  .hackathon-grid { grid-template-columns: 1fr; }
-  .hackathon-card:first-child { grid-column: span 1; }
   .sign-in-brand { left: 16px; }
 }
 
@@ -1107,12 +1077,6 @@ td { padding: 14px; font-size: 14px; }
 .benefits-charts { gap: 16px; }
 .benefits-charts > .card, .benefit-filter-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; }
 .vertical-chart small, .axis-labels, .chart-legend { font-size: 11px; }
-.hackathon-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.hackathon-card { min-height: 300px; padding: 20px; background: #fff; border: 1px solid var(--line); border-top: 4px solid #c44f88; border-radius: 12px; }
-.hackathon-card:first-child { grid-column: span 1; }
-.hackathon-card h2 { font: 700 20px/1.2 'Manrope', sans-serif; }
-.hackathon-card > p { font-size: 14px; }
-.hackathon-meta span, .idea-list span, .idea-list button { font-size: 12px; }
 
 .modal { background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 .modal-header h2 { font-family: 'Manrope', sans-serif; }
@@ -1169,7 +1133,6 @@ td { padding: 14px; font-size: 14px; }
   .opportunity-row .table-action { grid-column: 2; grid-row: 1 / 3; }
   .form-grid { padding-inline: 18px; }
   .form-footer { padding-inline: 18px; }
-  .hackathon-grid { grid-template-columns: 1fr; }
 }
 
 /* Multicolour studio identity */
@@ -1326,12 +1289,6 @@ td { padding: 14px; font-size: 14px; }
 .line-chart .line { stroke: #4169d5; }
 .line-chart .area { fill: rgba(121,152,242,.18); }
 .line-chart .chart-point { stroke: #4169d5; }
-.hackathon-card { border: 0; border-top: 0; }
-.hackathon-card:nth-child(4n + 1) { background: #f5a9cb; }
-.hackathon-card:nth-child(4n + 2) { background: #dce5ff; }
-.hackathon-card:nth-child(4n + 3) { background: #c7b5fa; }
-.hackathon-card:nth-child(4n) { background: #ff927f; }
-.hackathon-icon { color: #23243a; background: rgba(255,255,255,.45); border: 0; }
 
 .modal-backdrop { background: rgba(35,36,58,.62); }
 .modal { border: 0; box-shadow: 0 24px 60px rgba(35,36,58,.22); }
@@ -1472,12 +1429,6 @@ td { padding: 14px; font-size: 14px; }
 .benefits-charts > .card:nth-child(1) { border-top: 4px solid #f5a9cb; }
 .benefits-charts > .card:nth-child(2) { border-top: 4px solid #c7b5fa; }
 .benefit-filter-card { border-left: 4px solid #7998f2; }
-.hackathon-card:nth-child(n) { background: #fff; border: 1px solid #e0e1ed; }
-.hackathon-card:nth-child(4n + 1) { border-top: 5px solid #f5a9cb; }
-.hackathon-card:nth-child(4n + 2) { border-top: 5px solid #7998f2; }
-.hackathon-card:nth-child(4n + 3) { border-top: 5px solid #c7b5fa; }
-.hackathon-card:nth-child(4n) { border-top: 5px solid #ff927f; }
-.hackathon-icon { background: #f4f2fb; }
 .modal-header { background: #f2effd; }
 
 .studio-login { background: #f8f8fc; }
@@ -1706,7 +1657,6 @@ textarea, .field textarea, .assessment-criterion textarea {
   .detail-grid.management, .project-detail-grid { grid-template-columns: 1fr; }
   .benefits-charts { grid-template-columns: 1fr; }
   .kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hackathon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 1024px) {
@@ -1805,7 +1755,6 @@ textarea, .field textarea, .assessment-criterion textarea {
   .filter-group select { min-width: min(100%, 180px); flex: 1; }
   .modal-grid { grid-template-columns: 1fr; }
   .modal-grid .field { grid-column: 1 !important; }
-  .hackathon-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -1866,10 +1815,6 @@ textarea, .field textarea, .assessment-criterion textarea {
   .modal-backdrop { padding: 10px; }
   .modal { max-height: calc(100vh - 20px); }
   .modal-header, .modal-form, .confirm-content { padding: 18px; }
-  .detail-candidate-list > div:not(.empty-state) {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 
 /* Fixed textarea sizes so fields cannot be dragged larger by hand. */

@@ -3,7 +3,6 @@ import {
   BriefcaseBusiness,
   ChevronDown,
   ClipboardList,
-  FlaskConical,
   Gauge,
   Lightbulb,
   LogOut,
@@ -32,8 +31,7 @@ const managementNav = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
   { to: "/opportunities", label: "All Opportunities", icon: ClipboardList },
   { to: "/pipeline", label: "Project Pipeline", icon: BriefcaseBusiness },
-  { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 },
-  { to: "/hackathons", label: "Hackathons", icon: FlaskConical }
+  { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
 const engineerNav = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -47,8 +45,7 @@ const pageNames = {
   opportunities: "Opportunities",
   pipeline: "Project Pipeline",
   projects: "Project Details",
-  benefits: "Benefits Reporting",
-  hackathons: "Hackathons"
+  benefits: "Benefits Reporting"
 };
 function Layout() {
   const { isAuthenticated, currentUser, signOut, role, setRole } = useApp();
