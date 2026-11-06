@@ -2,7 +2,8 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
@@ -77,8 +78,14 @@ export function OpportunityDetailPage() {
             Return to dashboard
           </Button>}
     />;
-  const stages = ["Submitted", "Under Review", "Approved"];
-  const currentIndex = stages.indexOf(opportunity.status);
+  const rejected = opportunity.status === "Rejected";
+  const pending = opportunity.status === "Submitted" || opportunity.status === "Under Review";
+  const stages = pending
+    ? ["Submitted", "Under Review", "Decision"]
+    : rejected
+      ? ["Submitted", "Under Review", "Rejected"]
+      : ["Submitted", "Under Review", "Approved", "In Progress", "Completed"];
+  const currentIndex = stages.indexOf(pending ? opportunity.status : rejected ? "Rejected" : "Approved");
   const criterionGuidance = {
     "Strategic alignment": "1 = limited connection to LSBU priorities \xB7 5 = directly advances a key priority",
     "Benefit potential": "1 = limited or uncertain benefit \xB7 5 = substantial, measurable benefit",
@@ -159,29 +166,21 @@ export function OpportunityDetailPage() {
           <div>
             <h2>Opportunity progress</h2>
             <p>
-              {opportunity.status === "Rejected" ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
+              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
             </p>
           </div>
         </div>
-        {opportunity.status === "Rejected" ? <div className="rejected-state">
-            <span>
-              <Check size={16} />
-            </span>
-            <div>
-              <strong>Submitted and assessed</strong>
-              <p>Decision: Rejected</p>
-            </div>
-          </div> : <div className="timeline">
+        <div className="timeline">
             {stages.map((stage, index) => <div
-    className={`timeline-step ${index <= currentIndex ? "complete" : ""} ${index === currentIndex ? "current" : ""}`}
+    className={`timeline-step ${index <= currentIndex ? "complete" : ""} ${index === currentIndex ? "current" : ""} ${stage === "Rejected" ? "rejected" : ""}`}
     key={stage}
   >
                 <div>
-                  <Check size={14} />
+                  {stage === "Rejected" ? <X size={14} /> : <Check size={14} />}
                 </div>
                 <span>{stage}</span>
               </div>)}
-          </div>}
+          </div>
       </Card>
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
