@@ -8,16 +8,13 @@ import {
   Clock3,
   FolderKanban,
   Gauge,
-  Network,
-  Plus
+  Network
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { useStaffOpportunities } from "../data/useStaffOpportunities";
 import {
   Button,
   Card,
-  EmptyState,
   PageHeader,
   StatCard,
   StatusBadge,
@@ -222,95 +219,6 @@ function ManagerDashboard() {
     </>;
 }
 
-function StaffDashboard() {
-  const { currentUser } = useApp();
-  const navigate = useNavigate();
-  const { data: mine, loading, error, retry } = useStaffOpportunities(currentUser.email);
-  if (loading) return <div role="status"><EmptyState title="Loading your opportunities…" /></div>;
-  if (error) return <div role="alert">
-      <EmptyState title="Could not load your dashboard" text={error.message} action={<Button onClick={retry}>Try again</Button>} />
-    </div>;
-  return <>
-      <PageHeader
-    title="Dashboard"
-    subtitle="Track your opportunities and submit new ones to the AI Foundry."
-    actions={<Button icon={Plus} onClick={() => navigate("/submit")}>
-            Submit Opportunity
-          </Button>}
-  />
-      <div className="stats-grid three">
-        <StatCard
-    label="Total submissions"
-    value={mine.length}
-    icon={Network}
-    tone="blue"
-  />
-        <StatCard
-    label="Under Review"
-    value={mine.filter((item) => item.status === "Under Review").length}
-    detail={`${mine.filter((item) => item.status === "Submitted").length} submitted`}
-    icon={Clock3}
-    tone="amber"
-  />
-        <StatCard
-    label="Approved"
-    value={mine.filter((item) => item.status === "Approved").length}
-    detail="Approved for delivery"
-    icon={CheckCircle2}
-    tone="green"
-  />
-      </div>
-      <Card>
-        <div className="card-header">
-          <div>
-            <h2>Recent opportunities</h2>
-            <p>Your latest opportunities and their current status</p>
-          </div>
-          <button
-    className="text-button"
-    onClick={() => navigate("/opportunities")}
-  >
-            View all <ArrowRight size={15} />
-          </button>
-        </div>
-        <div className="table-wrap fit-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Opportunity Title</th>
-                <th>Department</th>
-                <th>Submission date</th>
-                <th>Current status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mine.slice(0, 5).map((item) => <tr
-    key={item.id}
-    onClick={() => navigate(`/opportunities/${item.id}`)}
-  >
-                  <td>
-                    <div className="title-cell">
-                      <strong>{item.title}</strong>
-                      <span>{item.id}</span>
-                    </div>
-                  </td>
-                  <td>{item.department}</td>
-                  <td>{item.submittedDate}</td>
-                  <td>
-                    <StatusBadge status={item.status} />
-                  </td>
-                  <td>
-                    <TableAction />
-                  </td>
-                </tr>)}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>;
-}
-
 function EngineerDashboard() {
   const { projects, benefits } = useApp();
   const navigate = useNavigate();
@@ -432,7 +340,7 @@ function EngineerDashboard() {
 
 export function DashboardPage() {
   const { role } = useApp();
-  if (role === "Staff") return <StaffDashboard />;
+  if (role === "Staff") return <Navigate to="/opportunities" replace />;
   if (role === "AI Foundry Engineer") return <EngineerDashboard />;
   return <ManagerDashboard />;
 }

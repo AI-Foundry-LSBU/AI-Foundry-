@@ -31,8 +31,8 @@ export function ProjectDetailPage() {
     return <EmptyState
       title="Access restricted"
       text="Project delivery is available to the AI Foundry team."
-      action={<Button onClick={() => navigate("/dashboard")}>
-            Return to dashboard
+      action={<Button onClick={() => navigate("/opportunities")}>
+            My Opportunities
           </Button>}
     />;
   const opportunity = opportunities.find(

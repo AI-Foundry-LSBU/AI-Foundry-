@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ClipboardList,
   Gauge,
-  Lightbulb,
   LogOut,
   Menu,
   Network,
@@ -23,9 +22,8 @@ import {
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 const staffNav = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/submit", label: "Submit Opportunity", icon: PlusCircle },
-  { to: "/opportunities", label: "My Opportunities", icon: ClipboardList }
+  { to: "/opportunities", label: "My Opportunities", icon: ClipboardList },
+  { to: "/submit", label: "Submit Opportunity", icon: PlusCircle }
 ];
 const managementNav = [
   { to: "/dashboard", label: "Management Dashboard", icon: Gauge },
@@ -71,7 +69,7 @@ function Layout() {
   const changeRole = (nextRole) => {
     setRole(nextRole);
     setMobileOpen(false);
-    navigate("/dashboard");
+    navigate(nextRole === "Staff" ? "/opportunities" : "/dashboard");
   };
   if (!isAuthenticated) return <Navigate to="/signin" replace />;
   return <div className="app-shell">
@@ -88,9 +86,6 @@ function Layout() {
             <X size={20} />
           </button>
         </div>
-        <div className="workspace-label rail-context">
-          {isStaff ? "ST" : isEngineer ? "EN" : "PM"}
-        </div>
         <nav className="rail-nav">
           {nav.map(({ to, label, icon: Icon }) => <NavLink
     key={to}
@@ -104,15 +99,6 @@ function Layout() {
               <span>{label}</span>
             </NavLink>)}
         </nav>
-        {isStaff && <button
-    className="rail-idea"
-    onClick={() => navigate("/submit")}
-    title="Submit Opportunity"
-    aria-label="Submit Opportunity"
-  >
-            <Lightbulb size={18} />
-            <span>Submit Opportunity</span>
-          </button>}
         <div className="sidebar-footer rail-footer">
           <PanelLeftClose size={17} />
           <span>LSBU</span>
