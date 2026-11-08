@@ -8,6 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
+import { deleteOpportunity } from "../data/opportunitiesApi";
 import { useStaffOpportunities } from "../data/useStaffOpportunities";
 import {
   Button,
@@ -60,6 +61,9 @@ export function OpportunityDetailPage() {
     startDate: "",
     targetDate: ""
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   if (staff.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
   if (staff.error && staff.error.status !== 404) {
     const forbidden = staff.error.status === 403;
@@ -168,7 +172,18 @@ export function OpportunityDetailPage() {
             {opportunity.submittedDate}
           </p>
         </div>
-        {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
+        <div className="detail-actions">
+          {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
+          {isStaff && <Button
+            variant="danger"
+            onClick={() => {
+              setDeleteError("");
+              setConfirmDelete(true);
+            }}
+          >
+            Delete
+          </Button>}
+        </div>
       </div>
       {message && <div className="toast-message">
           <CheckCircle2 size={18} />
@@ -411,6 +426,36 @@ export function OpportunityDetailPage() {
               </div>}
           </Card>}
       </div>
+      {confirmDelete && <Modal title="Delete opportunity" onClose={() => setConfirmDelete(false)}>
+          <div className="confirm-content">
+            <p>
+              Delete <strong>{opportunity.title}</strong>? It will be removed from My Opportunities.
+            </p>
+            {deleteError && <p role="alert">{deleteError}</p>}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setDeleteError("");
+                  try {
+                    await deleteOpportunity(currentUser.email, opportunity.id);
+                    navigate("/opportunities");
+                  } catch (error) {
+                    setDeleteError(error.message);
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete opportunity"}
+              </Button>
+            </div>
+          </div>
+        </Modal>}
       {pendingDecision && <Modal
     title={`Confirm ${pendingDecision.toLowerCase()} decision`}
     onClose={() => setPendingDecision(null)}
