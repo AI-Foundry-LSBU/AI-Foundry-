@@ -22,9 +22,8 @@ import {
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 const staffNav = [
-  { to: "/dashboard", label: "Dashboard", icon: Gauge },
-  { to: "/submit", label: "Submit Opportunity", icon: PlusCircle },
-  { to: "/opportunities", label: "My Opportunities", icon: ClipboardList }
+  { to: "/opportunities", label: "My Opportunities", icon: ClipboardList },
+  { to: "/submit", label: "Submit Opportunity", icon: PlusCircle }
 ];
 const managementNav = [
   { to: "/dashboard", label: "Management Dashboard", icon: Gauge },
@@ -70,7 +69,7 @@ function Layout() {
   const changeRole = (nextRole) => {
     setRole(nextRole);
     setMobileOpen(false);
-    navigate("/dashboard");
+    navigate(nextRole === "Staff" ? "/opportunities" : "/dashboard");
   };
   if (!isAuthenticated) return <Navigate to="/signin" replace />;
   return <div className="app-shell">

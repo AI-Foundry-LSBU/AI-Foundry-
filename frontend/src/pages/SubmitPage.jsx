@@ -210,7 +210,7 @@ export function SubmitPage() {
               <Button
     type="button"
     variant="secondary"
-    onClick={() => navigate("/dashboard")}
+    onClick={() => navigate("/opportunities")}
   >
                 Cancel
               </Button>

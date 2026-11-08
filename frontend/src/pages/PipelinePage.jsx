@@ -24,8 +24,8 @@ export function PipelinePage() {
     return <EmptyState
       title="Access restricted"
       text="Project Delivery is available to the AI Foundry delivery team."
-      action={<Button onClick={() => navigate("/dashboard")}>
-            Return to dashboard
+      action={<Button onClick={() => navigate("/opportunities")}>
+            My Opportunities
           </Button>}
     />;
   return <>
