@@ -16,7 +16,7 @@ export function SignInPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("staff@example.com");
   const [error, setError] = useState("");
-  if (isAuthenticated) return <Navigate to="/opportunities" replace />;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
   const submit = (event) => {
     event.preventDefault();
     if (!email.trim() || !email.includes("@")) {
@@ -24,7 +24,7 @@ export function SignInPage() {
       return;
     }
     signIn(email.trim());
-    navigate("/opportunities");
+    navigate("/dashboard");
   };
   return <div className="sign-in-shell studio-login">
       <div className="sign-in-brand login-brand">

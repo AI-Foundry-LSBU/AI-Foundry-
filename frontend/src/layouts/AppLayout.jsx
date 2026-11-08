@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ClipboardList,
   Gauge,
-  Lightbulb,
   LogOut,
   Menu,
   Network,
@@ -88,9 +87,6 @@ function Layout() {
             <X size={20} />
           </button>
         </div>
-        <div className="workspace-label rail-context">
-          {isStaff ? "ST" : isEngineer ? "EN" : "PM"}
-        </div>
         <nav className="rail-nav">
           {nav.map(({ to, label, icon: Icon }) => <NavLink
     key={to}
@@ -104,15 +100,6 @@ function Layout() {
               <span>{label}</span>
             </NavLink>)}
         </nav>
-        {isStaff && <button
-    className="rail-idea"
-    onClick={() => navigate("/submit")}
-    title="Submit Opportunity"
-    aria-label="Submit Opportunity"
-  >
-            <Lightbulb size={18} />
-            <span>Submit Opportunity</span>
-          </button>}
         <div className="sidebar-footer rail-footer">
           <PanelLeftClose size={17} />
           <span>LSBU</span>

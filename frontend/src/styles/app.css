@@ -2144,3 +2144,37 @@ button.project-progress {
 @media (max-width: 560px) {
   .app-main { padding-top: 64px; }
 }
+
+.page-container:has(.form-card),
+.page-container:has(.success-page) {
+  max-width: 1180px;
+}
+
+.form-card {
+  width: 100%;
+  margin-inline: auto;
+}
+
+.rail-nav {
+  margin-top: 16px;
+}
+
+.rail-footer {
+  margin-top: auto;
+}
+
+.opportunity-masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 22px;
+}
+
+.masthead-copy {
+  flex: 1 1 280px;
+  min-width: min(100%, 240px);
+}
+
+.opportunity-masthead > .button {
+  flex: 0 0 auto;
+}
