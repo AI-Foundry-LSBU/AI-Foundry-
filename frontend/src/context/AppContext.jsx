@@ -16,6 +16,12 @@ const demoNames = {
   "staff@example.com": "Demo Staff",
   "staff2@example.com": "Second Demo Staff",
   "manager@example.com": "Demo Manager",
+  "team@example.com": "Demo Engineer",
+};
+
+const demoRoles = {
+  "manager@example.com": "Digital Project Manager",
+  "team@example.com": "AI Foundry Engineer",
 };
 
 function demoUser(email) {
@@ -25,9 +31,9 @@ function demoUser(email) {
   return {
     name: resolvedName,
     email,
-    role: email === "manager@example.com" ? "Digital Project Manager" : "Staff",
+    role: demoRoles[email] ?? "Staff",
     initials: resolvedName.split(" ").map((part) => part[0]).join("").slice(0, 2),
-    team: resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
+    team: demoRoles[email] ? "AI Foundry" : resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
   };
 }
 
@@ -46,6 +52,7 @@ function AppProvider({ children }) {
     const user = demoUser(normalizedEmail);
     setCurrentUser(user);
     setRole(user.role);
+    return user;
   };
   const signOut = () => {
     sessionStorage.removeItem(demoEmailKey);

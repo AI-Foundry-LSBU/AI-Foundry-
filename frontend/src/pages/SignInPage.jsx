@@ -12,19 +12,19 @@ import {
 } from "../components/ui";
 
 export function SignInPage() {
-  const { isAuthenticated, signIn } = useApp();
+  const { isAuthenticated, currentUser, signIn } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState("staff@example.com");
   const [error, setError] = useState("");
-  if (isAuthenticated) return <Navigate to="/opportunities" replace />;
+  if (isAuthenticated) return <Navigate to={currentUser.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities"} replace />;
   const submit = (event) => {
     event.preventDefault();
     if (!email.trim() || !email.includes("@")) {
       setError("Enter a valid demo email address.");
       return;
     }
-    signIn(email.trim());
-    navigate("/opportunities");
+    const user = signIn(email);
+    navigate(user.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities");
   };
   return <div className="sign-in-shell studio-login">
       <div className="sign-in-brand login-brand">
@@ -78,14 +78,14 @@ export function SignInPage() {
           </div>
           <h2>Sign in to AI Foundry</h2>
           <p>
-            Use a seeded demo account to view or assess opportunities.
+            Use a seeded demo account to work with opportunities or projects.
           </p>
           <form onSubmit={submit}>
             <Field
     label="Demo email"
     required
     error={error}
-    helper="Use staff@example.com, staff2@example.com or manager@example.com."
+    helper="Use staff@example.com, staff2@example.com, manager@example.com or team@example.com."
   >
               <div className="input-with-icon">
                 <Mail size={16} />

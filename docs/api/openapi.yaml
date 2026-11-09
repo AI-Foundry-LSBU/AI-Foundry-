@@ -20,7 +20,7 @@ info:
     remains in scope for a later sprint. US04-US08 are included here so the
     frontend and backend can plan ahead, but are not committed to Sprint 1.
 
-    **Identifying users in Sprint 1:** full authentication is outside Sprint 1,
+    **Demo sign-in:** full authentication is outside this demo,
     so every request sends an `X-User-Email` header. The server looks the
     address up in the seeded demo users to find the person and their role.
     This is for local/demo development only and must not be used in production.
@@ -30,10 +30,9 @@ info:
     (AI Foundry team member).
 
     **Status lifecycle:**
-    `submitted` -> `in_assessment` -> `approved` or `rejected`;
-    `approved` -> `in_progress` -> `completed`.
-    Display labels on screen are: Submitted, In assessment, Approved,
-    Rejected, In progress, Completed.
+    `submitted` -> `in_assessment` -> `approved` or `rejected`.
+    Project delivery has a separate status. Once approved, an opportunity
+    can be moved into Project Delivery by a manager.
 
 servers:
   - url: http://localhost:3000/api/v1
@@ -43,9 +42,9 @@ tags:
   - name: Opportunities
     description: Submitting and viewing opportunities (US01, US02, US03)
   - name: Assessment
-    description: Assessing, prioritising and deciding (US04, US05)
+    description: Assessing, prioritising and deciding (US03)
   - name: Delivery
-    description: Updating project status (US06)
+    description: Tracking project delivery (US04)
   - name: Benefits
     description: Recording benefits and the dashboard (US07, US08)
 
@@ -227,7 +226,8 @@ paths:
       summary: Delete one of your opportunities
       description: |
         Removes an opportunity submitted by the signed-in user. Another
-        person, including a manager or team member, cannot delete it.
+        person, including a manager or team member, cannot delete it. Once a
+        delivery project is linked, the opportunity is protected from deletion.
       responses:
         '204':
           description: The opportunity was deleted.
@@ -237,6 +237,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The opportunity is linked to a delivery project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /opportunities/{id}/assessment:
     parameters:
@@ -244,7 +250,7 @@ paths:
     put:
       tags: [Assessment]
       operationId: assessOpportunity
-      summary: Assess and prioritise an opportunity (US04)
+      summary: Assess and prioritise an opportunity (US03)
       description: |
         Manager only. Creates or replaces the assessment. Moves a `submitted`
         opportunity to `in_assessment`. How the five scores combine into a
@@ -278,7 +284,7 @@ paths:
     post:
       tags: [Assessment]
       operationId: decideOpportunity
-      summary: Approve or reject an opportunity (US05)
+      summary: Approve or reject an opportunity (US03)
       description: |
         Manager only. The opportunity must be `in_assessment`, otherwise the
         call returns 409. A reason is required when rejecting.
@@ -306,37 +312,50 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /opportunities/{id}/status:
-    parameters:
-      - $ref: '#/components/parameters/OpportunityId'
-    patch:
+  /projects:
+    get:
       tags: [Delivery]
-      operationId: updateStatus
-      summary: Update project status (US06)
+      operationId: listProjects
+      summary: List approved projects (US04)
+      description: Managers and team members can see all projects, including completed ones.
+      responses:
+        '200':
+          description: Delivery projects, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Delivery]
+      operationId: createProject
+      summary: Move an approved opportunity to Project Delivery (US04)
       description: |
-        Manager or team member. Only follows the lifecycle: `approved` to
-        `in_progress`, then `in_progress` to `completed`. Any other jump
-        returns 409.
+        Manager only. An approved opportunity can have one delivery project.
+        New projects start as `not_started`. Delivery dates are optional.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [status]
-              properties:
-                status:
-                  type: string
-                  enum: [in_progress, completed]
-            example:
-              status: in_progress
+              $ref: '#/components/schemas/ProjectCreate'
       responses:
-        '200':
-          description: Status updated.
+        '201':
+          description: Project created.
+          headers:
+            Location:
+              description: Relative URL of the new project.
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/ProjectDetail'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -346,7 +365,60 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: The opportunity is not approved or already has a delivery project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /projects/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Delivery]
+      operationId: getProject
+      summary: Open a project with its progress notes (US04)
+      description: Managers and team members can read a project and its note history.
+      responses:
+        '200':
+          $ref: '#/components/responses/ProjectDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+    patch:
+      tags: [Delivery]
+      operationId: updateProject
+      summary: Update delivery status or add a progress note (US04)
+      description: |
+        Managers and team members can update projects. Only supplied fields
+        are changed. A note is appended with the current user's name and
+        timestamp. The status and note are saved together. Setting status
+        to `completed` sets the progress estimate to 100%.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProjectDetail'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
 
   /opportunities/{id}/benefits:
     parameters:
@@ -438,7 +510,7 @@ components:
       in: header
       name: X-User-Email
       description: |
-        Sprint 1 only. Email of a seeded demo user, for example
+        Demo only. Email of a seeded demo user, for example
         staff@example.com. Replace with bearer tokens later.
 
   parameters:
@@ -515,6 +587,18 @@ components:
           example:
             code: NOT_FOUND
             message: Opportunity not found.
+    ProjectDetail:
+      description: The project and all saved notes, newest first.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProjectDetail'
+    ProjectNotFound:
+      description: No project with that id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     Conflict:
       description: The opportunity is not in a status that allows this action.
       content:
@@ -639,6 +723,10 @@ components:
         updatedAt:
           type: string
           format: date-time
+        projectId:
+          type: string
+          format: uuid
+          description: The linked delivery project, when present.
         assessment:
           $ref: '#/components/schemas/Assessment'
         decision:
@@ -732,6 +820,111 @@ components:
             decidedAt:
               type: string
               format: date-time
+
+    ProjectStatus:
+      type: string
+      enum: [not_started, in_progress, testing, completed]
+
+    ProjectCreate:
+      type: object
+      required: [opportunityId]
+      properties:
+        opportunityId:
+          type: string
+          format: uuid
+        startDate:
+          type: string
+          format: date
+        targetDate:
+          type: string
+          format: date
+          description: On or after the start date, if both dates are supplied.
+
+    ProjectUpdate:
+      type: object
+      anyOf:
+        - required: [status]
+        - required: [progress]
+        - required: [note]
+      properties:
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+
+    Project:
+      type: object
+      required: [id, opportunityId, title, department, description, priority, status, progress, startDate, targetDate, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        opportunityId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        department:
+          type: string
+        description:
+          type: string
+          description: Proposed improvement from the approved opportunity.
+        priority:
+          type: string
+          nullable: true
+          enum: [high, medium, low, null]
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        targetDate:
+          type: string
+          format: date
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          required: [notes]
+          properties:
+            notes:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProjectProgressNote'
+
+    ProjectProgressNote:
+      type: object
+      required: [id, text, author, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        author:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     BenefitInput:
       type: object

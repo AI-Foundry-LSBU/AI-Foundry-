@@ -63,13 +63,14 @@ export async function findOpportunity(pool, id) {
   const { rows } = await pool.query(
     `SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
-            to_jsonb(d) AS decision, decider.name AS decider_name
+            to_jsonb(d) AS decision, decider.name AS decider_name, p.id AS project_id
      FROM opportunities o
      JOIN users submitter ON submitter.id = o.submitted_by
      LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id
      LEFT JOIN users assessor ON assessor.id = a.assessed_by
      LEFT JOIN opportunity_decisions d ON d.opportunity_id = o.id
      LEFT JOIN users decider ON decider.id = d.decided_by
+     LEFT JOIN projects p ON p.opportunity_id = o.id
      WHERE o.id = $1`,
     [id]
   );

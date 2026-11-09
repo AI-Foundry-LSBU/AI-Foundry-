@@ -1,3 +1,5 @@
+import { requestJson } from "./apiRequest";
+
 const unavailableMessage = "The opportunities API is unavailable. Check that the backend is running and try again.";
 
 const statusLabels = {
@@ -17,24 +19,8 @@ const categoryLabels = {
   other: "Other",
 };
 
-async function request(email, path, options = {}) {
-  const response = await fetch(`/api/v1${path}`, {
-    ...options,
-    headers: { "X-User-Email": email, ...options.headers },
-  }).catch((error) => {
-    if (error.name === "AbortError") throw error;
-    throw new Error(unavailableMessage);
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok || !data) {
-    const message = response.status === 401
-      ? "Sign out and sign in with a seeded demo email, such as staff@example.com."
-      : data?.message ?? unavailableMessage;
-    throw Object.assign(new Error(message), { status: response.status, fields: data?.fields });
-  }
-
-  return data;
+function request(email, path, options) {
+  return requestJson(email, path, options, unavailableMessage);
 }
 
 function toOpportunity(data) {

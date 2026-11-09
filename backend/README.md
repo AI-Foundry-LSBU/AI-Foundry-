@@ -1,6 +1,6 @@
 # AI Foundry backend
 
-This guide sets up a local database and runs the Sprint 1 API for submitting and tracking opportunities. Run the first-time steps once on each computer.
+This guide sets up a local database and runs the API for opportunities and project delivery. Run the first-time steps once on each computer.
 
 ## Start it after the first setup
 
@@ -122,7 +122,7 @@ Run `npm ci` the first time or after a dependency change. Open the **Local** add
 3. Open **My Opportunities**, refresh the page, and open the saved request. Check that its reference and details match the submission.
 4. To check access, copy the detail URL, sign out, and sign in with `staff2@example.com`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
 
-Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and deletion actions use the API. The seeded manager account uses the API for assessment and decisions. The engineer view uses sample data.
+Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and deletion actions use the API. The seeded manager account uses the API for assessment and decisions. The manager and engineer use the API for Project Delivery.
 
 ## Try the manager queue, assessment and decision
 
@@ -136,6 +136,21 @@ On an existing database, run `npm run db:migrate` from `backend/` to add the ass
 6. Sign back in as the submitting staff user. Check the updated status and the saved reason in **My Opportunities**.
 
 The **View as** menu on a staff account offers sample role previews. Use the seeded manager sign-in to work with live assessments.
+
+## Try Project Delivery (US04)
+
+On an existing database, run `npm run db:migrate` from `backend/`, then restart
+the backend. The migration creates `projects` and `project_progress_notes`.
+It preserves existing opportunities and assessments.
+
+1. As `manager@example.com`, open an approved opportunity and select **Move to Project Delivery**. Optionally add planned dates, then select **Create Project**. The project starts as **Not Started**.
+2. Sign in as `team@example.com`, open the project in **Project Delivery**, choose **In Progress** or **Testing**, and enter a note. Select **Save Progress** and refresh.
+3. Sign in as `manager@example.com`. Open the same project in **Project Delivery** and confirm the status and note are there.
+
+Each opportunity can have one project. Creating the project preserves the
+opportunity and its approval. An opportunity linked to a project cannot be
+deleted through the staff deletion action. For the API endpoints and fields,
+see [OpenAPI](../docs/api/openapi.yaml).
 
 ## Files to share
 
