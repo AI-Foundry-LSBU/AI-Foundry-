@@ -13,7 +13,7 @@ Developed as part of the ICT Project Management module, using the AI Foundry Pro
 
 ## API
 
-The API specification is available in [`docs/api/openapi.yaml`](https://github.com/AI-Foundry-LSBU/AI-Foundry-/blob/feature/backend/docs/api/openapi.yaml).
+The API specification is available in [`docs/api/openapi.yaml`](docs/api/openapi.yaml).
 
 It covers the endpoints, request and response formats, and user roles. Any changes to the API should be discussed with the frontend and backend developers to avoid issues when connecting everything.
 
@@ -35,4 +35,6 @@ For Sprint 1, the `X-User-Email` header is used to identify demo users. This is 
 
 ## Running Locally
 
-Setup instructions will be added once the frontend and backend configurations are ready.
+The setup steps are in [`backend/README.md`](backend/README.md). That guide creates the local database, starts the API, and runs the website.
+
+Sign in with `staff@example.com` to submit, track or delete your own requests. Sign in with `manager@example.com` to assess requests and record decisions. The engineer view uses sample data.

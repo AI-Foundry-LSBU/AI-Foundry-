@@ -1,4 +1,4 @@
-import { findOpportunities, findOpportunity, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
+import { deleteOpportunity, findOpportunities, findOpportunity, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
 import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -162,5 +162,19 @@ export function decideOpportunity(pool) {
       code: 'INVALID_STATUS',
       message: 'An opportunity must be under review before you can record a decision.'
     });
+  };
+}
+
+export function removeOpportunity(pool) {
+  return async (req, res) => {
+    const { id } = req.params;
+    const row = uuidPattern.test(id) ? await findOpportunity(pool, id) : undefined;
+    if (!row) {
+      return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
+    }
+    if (row.submitted_by !== req.user.id) return forbidden(res);
+
+    await deleteOpportunity(pool, id, req.user.id);
+    return res.status(204).end();
   };
 }

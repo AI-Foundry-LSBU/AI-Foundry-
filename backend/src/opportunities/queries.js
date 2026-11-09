@@ -51,6 +51,14 @@ export async function findOpportunities(pool, { userId, status, category, priori
   return { rows: rows.filter((row) => row.id !== null), total: Number(rows[0].total) };
 }
 
+export async function deleteOpportunity(pool, id, userId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM opportunities WHERE id = $1 AND submitted_by = $2',
+    [id, userId]
+  );
+  return rowCount === 1;
+}
+
 export async function findOpportunity(pool, id) {
   const { rows } = await pool.query(
     `SELECT o.*, submitter.name AS submitter_name,
