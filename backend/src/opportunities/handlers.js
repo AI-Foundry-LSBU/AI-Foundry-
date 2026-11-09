@@ -44,6 +44,7 @@ function opportunityResponse(row, submitterName) {
     hackathonName: row.hackathon_name ?? undefined,
     submittedBy: { id: row.submitted_by, name: submitterName },
     submittedAt: row.submitted_at,
+    projectId: row.project_id ?? undefined,
     updatedAt: row.updated_at,
     assessment: assessmentResponse(row),
     decision: decisionResponse(row)
@@ -174,7 +175,17 @@ export function removeOpportunity(pool) {
     }
     if (row.submitted_by !== req.user.id) return forbidden(res);
 
-    await deleteOpportunity(pool, id, req.user.id);
+    try {
+      if (!await deleteOpportunity(pool, id, req.user.id)) {
+        return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
+      }
+    } catch (error) {
+      if (error.code !== '23503' || error.constraint !== 'projects_opportunity_fk') throw error;
+      return res.status(409).json({
+        code: 'PROJECT_EXISTS',
+        message: 'This opportunity is linked to a delivery project and cannot be deleted.'
+      });
+    }
     return res.status(204).end();
   };
 }

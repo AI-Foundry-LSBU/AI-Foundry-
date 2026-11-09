@@ -4,6 +4,8 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { deliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
+import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { projectStatuses } from "../data/options";
 import {
   Button,
@@ -17,24 +19,65 @@ import {
 
 export function ProjectDetailPage() {
   const { id } = useParams();
-  const { role, projects, opportunities, benefits, updateProject } = useApp();
+  const { role, currentUser } = useApp();
   const navigate = useNavigate();
-  const project = projects.find((item) => item.id === id);
+  const delivery = useDeliveryProjects(id);
+
+  if (role === "Staff") return <EmptyState
+    title="Access restricted"
+    text="Project delivery is available to the AI Foundry team."
+    action={<Button onClick={() => navigate("/opportunities")}>My Opportunities</Button>}
+  />;
+  if (delivery.loading) return <div role="status"><EmptyState title="Loading project…" /></div>;
+  if (delivery.error && delivery.error.status !== 404) return <div role="alert">
+    <EmptyState title="Could not load project" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
+  </div>;
+  if (!delivery.data) return <EmptyState
+    title="Project not found"
+    text="Return to Project Delivery to select another project."
+    action={<Button onClick={() => navigate("/pipeline")}>Project Delivery</Button>}
+  />;
+
+  return <ProjectDetail
+    key={`${currentUser.email}:${role}:${id}`}
+    initialProject={delivery.data}
+    isLive={delivery.isLive}
+  />;
+}
+
+function ProjectDetail({ initialProject, isLive }) {
+  const { currentUser, opportunities, benefits, updateProject } = useApp();
+  const navigate = useNavigate();
+  const [savedProject, setSavedProject] = useState(null);
+  const project = savedProject ?? initialProject;
+  const [status, setStatus] = useState(initialProject.status);
+  const [progress, setProgress] = useState(initialProject.progress);
   const [note, setNote] = useState("");
-  if (!project)
-    return <EmptyState
-      title="Project not found"
-      text="Return to Project Delivery to select another project."
-    />;
-  const isRestricted = role === "Staff";
-  if (isRestricted)
-    return <EmptyState
-      title="Access restricted"
-      text="Project delivery is available to the AI Foundry team."
-      action={<Button onClick={() => navigate("/opportunities")}>
-            My Opportunities
-          </Button>}
-    />;
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const saveProgress = async (event) => {
+    event.preventDefault();
+    if (saving || (status === project.status && progress === project.progress && !note.trim())) return;
+    setFeedback(null);
+    setSaving(true);
+    try {
+      const updated = await updateDeliveryProject(currentUser.email, project.id, {
+        status: status === project.status ? undefined : status,
+        progress: status === "Completed" || progress === project.progress ? undefined : progress,
+        note: note.trim() || undefined,
+      });
+      setSavedProject(updated);
+      setStatus(updated.status);
+      setProgress(updated.progress);
+      setNote("");
+      setFeedback({ message: "Project progress saved." });
+    } catch (error) {
+      setFeedback({ error: true, message: Object.values(error.fields ?? {})[0] ?? error.message });
+    } finally {
+      setSaving(false);
+    }
+  };
   const opportunity = opportunities.find(
     (item) => item.id === project.opportunityId
   );
@@ -164,12 +207,13 @@ export function ProjectDetailPage() {
           <Card>
             <div className="card-header">
               <div>
-                <h2>Activity</h2>
-                <p>Chronological delivery updates</p>
+                <h2>{isLive ? "Progress notes" : "Activity"}</h2>
+                <p>Latest delivery updates first</p>
               </div>
             </div>
+            {project.activity.length === 0 && <p>No updates recorded yet.</p>}
             <div className="activity-list">
-              {project.activity.map((item, index) => <div className="activity-item" key={`${item.date}-${index}`}>
+              {project.activity.map((item, index) => <div className="activity-item" key={item.id ?? `${item.date}-${index}`}>
                   <div className="activity-dot" />
                   <div>
                     <strong>{item.text}</strong>
@@ -188,6 +232,41 @@ export function ProjectDetailPage() {
               <p>Update delivery status and record progress</p>
             </div>
           </div>
+          {isLive ? <form onSubmit={saveProgress}>
+            <Field label="Current status">
+              <select value={status} disabled={saving} onChange={(event) => setStatus(event.target.value)}>
+                {deliveryStatuses.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </Field>
+            <Field label="Progress estimate" helper="A completed project is marked 100%.">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                required
+                value={status === "Completed" ? 100 : progress}
+                disabled={saving || status === "Completed"}
+                onChange={(event) => setProgress(event.target.value === "" ? "" : Number(event.target.value))}
+              />
+            </Field>
+            <Field label="Add progress note">
+              <textarea
+                rows={5}
+                maxLength={2000}
+                value={note}
+                disabled={saving}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Share completed work or a blocker..."
+              />
+            </Field>
+            {feedback && <p role={feedback.error ? "alert" : "status"}>{feedback.message}</p>}
+            <Button
+              type="submit"
+              disabled={saving || (status === project.status && progress === project.progress && !note.trim())}
+            >
+              {saving ? "Saving…" : "Save Progress"}
+            </Button>
+          </form> : <>
           <Field label="Current status">
             <select
     value={project.status}
@@ -231,6 +310,7 @@ export function ProjectDetailPage() {
   />
           </Field>
           <Button onClick={addNote}>Add Progress Update</Button>
+          </>}
         </Card>
       </div>
     </>;

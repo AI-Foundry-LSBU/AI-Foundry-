@@ -10,6 +10,7 @@ import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
 import { deleteOpportunity, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
+import { createDeliveryProject } from "../data/projectsApi";
 import {
   Button,
   Card,
@@ -95,6 +96,8 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [pipelineError, setPipelineError] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
   const [projectForm, setProjectForm] = useState({
     startDate: "",
     targetDate: ""
@@ -102,7 +105,8 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const isManager = role === "Digital Project Manager";
   const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
-  const project = projects.find((item) => item.opportunityId === opportunity.id);
+  const project = isLive ? undefined : projects.find((item) => item.opportunityId === opportunity.id);
+  const projectId = isLive ? initialOpportunity.projectId : project?.id;
   const isRestricted = isEngineer && opportunity.status !== "Approved";
   if (isRestricted)
     return <EmptyState
@@ -202,8 +206,22 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     }
     setPendingDecision(null);
   };
-  const moveToPipeline = (event) => {
+  const moveToPipeline = async (event) => {
     event.preventDefault();
+    if (creatingProject) return;
+    if (isLive) {
+      setPipelineError("");
+      setCreatingProject(true);
+      try {
+        const created = await createDeliveryProject(currentUser.email, opportunity.id, projectForm);
+        navigate(`/projects/${created.id}`);
+      } catch (error) {
+        setPipelineError(error.fields?.startDate ?? error.fields?.targetDate ?? error.message);
+      } finally {
+        setCreatingProject(false);
+      }
+      return;
+    }
     const created = createProject(
       opportunity.id,
       projectForm.startDate,
@@ -233,7 +251,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
         </div>
         <div className="detail-actions">
           {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
-          {isStaff && <Button
+          {isStaff && !projectId && <Button
             variant="danger"
             onClick={() => {
               setDeleteError("");
@@ -338,7 +356,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               <div className="meta-grid">
                 <div>
                   <span>Project reference</span>
-                  <strong>{project.id}</strong>
+                  <strong>{projectId}</strong>
                 </div>
                 <div>
                   <span>Delivery status</span>
@@ -463,33 +481,36 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               {!isLive && <Button
     variant="ghost"
     onClick={() => openDecision("Under Review")}
-    disabled={Boolean(project) || !decisionReason.trim()}
+    disabled={Boolean(projectId) || !decisionReason.trim()}
   >
                 Keep Under Review
               </Button>}
               </>}
             </div>
-            {!isLive && opportunity.status === "Approved" && !project && <div className="pipeline-action">
+            {opportunity.status === "Approved" && !projectId && <div className="pipeline-action">
                 <div>
                   <strong>Ready for delivery</strong>
                   <span>
-                    Create a linked project when delivery dates are known.
+                    Create a linked project and add planned dates if available.
                   </span>
                 </div>
-                <Button onClick={() => setPipelineOpen(true)}>
+                <Button onClick={() => {
+                  setPipelineError("");
+                  setPipelineOpen(true);
+                }}>
                   Move to Project Delivery
                 </Button>
               </div>}
-            {project && <div className="pipeline-action complete">
+            {projectId && <div className="pipeline-action complete">
                 <div>
-                  <strong>Linked project: {project.id}</strong>
+                  <strong>Linked project: {projectId}</strong>
                   <span>
                     This opportunity is already in Project Delivery.
                   </span>
                 </div>
                 <Button
     variant="secondary"
-    onClick={() => navigate(`/projects/${project.id}`)}
+    onClick={() => navigate(`/projects/${projectId}`)}
   >
                   View Project
                 </Button>
@@ -561,15 +582,15 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
         </Modal>}
       {pipelineOpen && <Modal
     title="Move to Project Delivery"
-    onClose={() => setPipelineOpen(false)}
+    onClose={() => { if (!creatingProject) setPipelineOpen(false); }}
   >
           <form className="modal-form" onSubmit={moveToPipeline}>
             <div className="modal-context">
               <span>{opportunity.id}</span>
               <strong>{opportunity.title}</strong>
               <p>
-                A linked project will be created in the Approved column. The
-                original assessment and opportunity record will be preserved.
+                A linked project will be created in the {isLive ? "Not Started" : "Approved"} column.
+                The original assessment and opportunity record will be preserved.
               </p>
             </div>
             <div className="modal-grid">
@@ -594,15 +615,17 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   />
               </Field>
             </div>
+            {pipelineError && <p role="alert">{pipelineError}</p>}
             <div className="modal-actions">
               <Button
     type="button"
     variant="secondary"
+    disabled={creatingProject}
     onClick={() => setPipelineOpen(false)}
   >
                 Cancel
               </Button>
-              <Button type="submit">Create Project</Button>
+              <Button type="submit" disabled={creatingProject}>{creatingProject ? "Creating…" : "Create Project"}</Button>
             </div>
           </form>
         </Modal>}

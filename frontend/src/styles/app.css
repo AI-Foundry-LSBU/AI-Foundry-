@@ -126,7 +126,7 @@ td strong { color: var(--ink); font-weight: 600; }
 .table-action { display: inline-flex; align-items: center; gap: 2px; color: var(--blue-600); font-size: 11px; font-weight: 700; }
 .badge { width: fit-content; padding: 4px 8px; display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .badge i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.badge-submitted, .badge-planned, .badge-in-review { color: var(--blue-700); background: var(--blue-100); }
+.badge-submitted, .badge-planned, .badge-in-review, .badge-not-started, .badge-testing { color: var(--blue-700); background: var(--blue-100); }
 .badge-under-review { color: var(--amber); background: var(--amber-bg); }
 .badge-approved { color: var(--violet); background: var(--violet-bg); }
 .badge-in-progress { color: #207d9d; background: #e5f6fa; }
@@ -272,7 +272,7 @@ td strong { color: var(--ink); font-weight: 600; }
 .kanban-title strong { font-size: 10px; }
 .kanban-title > span { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted); background: white; border-radius: 6px; font-size: 9px; font-weight: 700; }
 .dot { width: 7px; height: 7px; display: block; border-radius: 50%; background: var(--blue-600); }
-.dot-planned { background: var(--violet); }
+.dot-planned, .dot-testing { background: var(--violet); }
 .dot-in-progress { background: #2593b3; }
 .dot-completed { background: var(--green); }
 .kanban-list { display: flex; flex-direction: column; gap: 10px; }
@@ -302,6 +302,7 @@ td strong { color: var(--ink); font-weight: 600; }
 .manual-progress span { color: var(--subtle); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .45px; }
 .manual-progress strong { color: var(--blue-600); font: 700 16px 'Manrope', sans-serif; }
 .manual-progress p { margin-top: 8px; color: var(--subtle); font-size: 8px; line-height: 1.45; }
+.project-controls form { display: grid; gap: 15px; padding: 0 18px; }
 .project-controls > .button { width: calc(100% - 36px); margin: 0 18px; }
 .benefits-charts { margin-bottom: 18px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 18px; }
 .benefit-filter-card { margin-bottom: 18px; overflow: hidden; }
@@ -451,7 +452,7 @@ td strong { font-weight: 600; }
 .title-cell span, .mono { color: #8b817c; font-size: 8px; }
 .table-action { color: var(--blue-700); font-size: 9px; }
 .badge { padding: 4px 7px; border: 1px solid currentColor; border-radius: 2px; background: transparent; font-size: 8px; font-weight: 600; }
-.badge-submitted, .badge-planned, .badge-in-review { color: #775a35; background: #f4ecdf; }
+.badge-submitted, .badge-planned, .badge-in-review, .badge-not-started, .badge-testing { color: #775a35; background: #f4ecdf; }
 .badge-under-review { color: var(--amber); background: var(--amber-bg); }
 .badge-approved { color: #684966; background: var(--violet-bg); }
 .badge-in-progress { color: #2f6867; background: #e4efed; }
@@ -983,7 +984,7 @@ td { padding: 14px; font-size: 14px; }
 .table-action { color: #4169d5; font-size: 13px; font-weight: 700; }
 .badge { padding: 5px 9px; border: 0; border-radius: 999px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; text-transform: none; }
 .badge i { display: block; }
-.badge-submitted, .badge-planned, .badge-in-review { color: #365da8; background: #dce9ff; }
+.badge-submitted, .badge-planned, .badge-in-review, .badge-not-started, .badge-testing { color: #365da8; background: #dce9ff; }
 .badge-under-review { color: #94601a; background: #fff0cc; }
 .badge-approved { color: #6554a3; background: #e9e7ff; }
 .badge-in-progress { color: #226d67; background: #dff2ed; }
@@ -1241,7 +1242,7 @@ td { padding: 14px; font-size: 14px; }
 .opportunity-row:hover { background: #dce5ff; }
 .opportunity-row:hover::before { background: #c44f88; }
 
-.badge-submitted, .badge-planned, .badge-in-review { color: #3f58ad; background: #dce5ff; }
+.badge-submitted, .badge-planned, .badge-in-review, .badge-not-started, .badge-testing { color: #3f58ad; background: #dce5ff; }
 .badge-under-review { color: #864268; background: #f5d5e4; }
 .badge-approved { color: #5c4d9c; background: #e7e0ff; }
 .badge-in-progress { color: #3e559f; background: #cfdafd; }

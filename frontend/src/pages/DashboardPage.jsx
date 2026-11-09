@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -31,10 +32,11 @@ function annualSavings(records) {
 }
 
 function ManagerDashboard() {
-  const { currentUser, opportunities: samples, projects, benefits } = useApp();
+  const { currentUser, opportunities: samples, benefits } = useApp();
   const navigate = useNavigate();
   const liveManager = currentUser.role === "Digital Project Manager";
   const live = useOpportunities(liveManager ? currentUser.email : null, "all");
+  const delivery = useDeliveryProjects();
   if (live.loading) return <div role="status"><EmptyState title="Loading opportunities…" /></div>;
   if (live.error) return <div role="alert">
       <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
@@ -54,6 +56,7 @@ function ManagerDashboard() {
   const savings = annualSavings(benefits);
   const submitted = opportunities.filter((item) => item.status === "Submitted").length;
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
+  const projects = delivery.data ?? [];
   const activeProjects = projects.filter((item) => item.status !== "Completed");
   return <>
       <PageHeader
@@ -80,14 +83,14 @@ function ManagerDashboard() {
   />
         <StatCard
     label="Active projects"
-    value={activeProjects.length}
-    detail="Approved, planned and in progress"
+    value={delivery.loading || delivery.error ? "—" : activeProjects.length}
+    detail="Projects awaiting completion"
     icon={FolderKanban}
     tone="violet"
   />
         <StatCard
     label="Completed projects"
-    value={projects.filter((item) => item.status === "Completed").length}
+    value={delivery.loading || delivery.error ? "—" : projects.filter((item) => item.status === "Completed").length}
     detail="Marked completed"
     icon={CheckCircle2}
     tone="green"
@@ -176,6 +179,10 @@ function ManagerDashboard() {
               Open Project Delivery <ArrowRight size={15} />
             </button>
           </div>
+          {delivery.loading && <p role="status">Loading projects…</p>}
+          {delivery.error && <div role="alert">
+            <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
+          </div>}
           <div className="project-overview">
             {projects.slice(0, 3).map((project) => {
     const progress = project.progress;
@@ -229,8 +236,14 @@ function ManagerDashboard() {
 }
 
 function EngineerDashboard() {
-  const { projects, benefits } = useApp();
+  const { benefits } = useApp();
   const navigate = useNavigate();
+  const delivery = useDeliveryProjects();
+  if (delivery.loading) return <div role="status"><EmptyState title="Loading projects…" /></div>;
+  if (delivery.error) return <div role="alert">
+    <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
+  </div>;
+  const projects = delivery.data;
   const countStatus = (status) => projects.filter((item) => item.status === status).length;
   const hours = hoursSaved(benefits);
   const savings = annualSavings(benefits);
@@ -244,15 +257,15 @@ function EngineerDashboard() {
   />
       <div className="stats-grid four">
         <StatCard
-    label="Approved"
-    value={countStatus("Approved")}
-    detail="Not yet planned"
+    label={delivery.isLive ? "Not Started" : "Approved"}
+    value={countStatus(delivery.isLive ? "Not Started" : "Approved")}
+    detail="Awaiting delivery"
     icon={BriefcaseBusiness}
     tone="blue"
   />
         <StatCard
-    label="Planned"
-    value={countStatus("Planned")}
+    label={delivery.isLive ? "Testing" : "Planned"}
+    value={countStatus(delivery.isLive ? "Testing" : "Planned")}
     icon={CalendarDays}
     tone="amber"
   />

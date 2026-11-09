@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { deliveryStatuses } from "../data/projectsApi";
+import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { projectStatuses } from "../data/options";
 import {
   Button,
@@ -17,9 +19,10 @@ import {
 } from "../components/ui";
 
 export function PipelinePage() {
-  const { role, projects, updateProject } = useApp();
+  const { role, updateProject } = useApp();
   const navigate = useNavigate();
   const [view, setView] = useState("kanban");
+  const delivery = useDeliveryProjects();
   if (role === "Staff")
     return <EmptyState
       title="Access restricted"
@@ -28,6 +31,12 @@ export function PipelinePage() {
             My Opportunities
           </Button>}
     />;
+  if (delivery.loading) return <div role="status"><EmptyState title="Loading projects…" /></div>;
+  if (delivery.error) return <div role="alert">
+    <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
+  </div>;
+  const projects = delivery.data;
+  const statuses = delivery.isLive ? deliveryStatuses : projectStatuses;
   return <>
       <PageHeader
     title="Project Delivery"
@@ -47,8 +56,11 @@ export function PipelinePage() {
             </button>
           </div>}
   />
-      {view === "kanban" ? <div className="kanban">
-          {projectStatuses.map((status) => <div className="kanban-column" key={status}>
+      {projects.length === 0 ? <EmptyState
+        title="No delivery projects yet"
+        text="A Digital Project Manager can move an approved opportunity to Project Delivery."
+      /> : view === "kanban" ? <div className="kanban">
+          {statuses.map((status) => <div className="kanban-column" key={status}>
               <div className="kanban-title">
                 <div>
                   <i
@@ -80,7 +92,7 @@ export function PipelinePage() {
                           <span>Target {project.targetDate}</span>
                         </div>
                       </button>
-                      <select
+                      {!delivery.isLive && <select
     aria-label={`Status for ${project.title}`}
     value={project.status}
     onChange={(event) => updateProject(
@@ -90,7 +102,7 @@ export function PipelinePage() {
     )}
   >
                         {projectStatuses.map((item) => <option key={item}>{item}</option>)}
-                      </select>
+                      </select>}
                     </Card>)}
               </div>
             </div>)}
