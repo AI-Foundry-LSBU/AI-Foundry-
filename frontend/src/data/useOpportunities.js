@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { getAllOpportunities, getMyOpportunities, getOpportunity } from "./opportunitiesApi";
+import { getAllOpportunities, getApprovedOpportunities, getMyOpportunities, getOpportunity } from "./opportunitiesApi";
+
+const listLoaders = {
+  all: getAllOpportunities,
+  approved: getApprovedOpportunities,
+  mine: getMyOpportunities,
+};
 
 export function useOpportunities(email, scope, id) {
   const [attempt, setAttempt] = useState(0);
@@ -8,7 +14,7 @@ export function useOpportunities(email, scope, id) {
   useEffect(() => {
     if (!email) return;
     const controller = new AbortController();
-    const loadList = scope === "all" ? getAllOpportunities : getMyOpportunities;
+    const loadList = listLoaders[scope];
     const request = id === undefined
       ? loadList(email, controller.signal)
       : getOpportunity(email, id, controller.signal);

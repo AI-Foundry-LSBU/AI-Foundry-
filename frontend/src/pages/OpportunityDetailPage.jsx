@@ -8,7 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity, getStaffOpportunityStatus, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, getOpportunityDisplayStatus, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
 import { createDeliveryProject } from "../data/projectsApi";
 import {
@@ -34,8 +34,8 @@ export function OpportunityDetailPage() {
   const { role, currentUser, opportunities } = useApp();
   const navigate = useNavigate();
   const sample = opportunities.find((item) => item.id === id);
-  const liveManager = role === "Digital Project Manager" && role === currentUser.role;
-  const isLive = role === "Staff" || (liveManager && !sample);
+  const liveRole = role === currentUser.role;
+  const isLive = role === "Staff" || (liveRole && (role === "AI Foundry Engineer" || !sample));
   const live = useOpportunities(isLive ? currentUser.email : null, "mine", id);
   const opportunity = isLive ? live.data : sample;
   if (live.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
@@ -116,8 +116,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             Return to dashboard
           </Button>}
     />;
-  const displayStatus = isStaff ? getStaffOpportunityStatus(opportunity) : opportunity.status;
-  const deliveryStages = isStaff && opportunity.deliveryStatus ? ["In Progress", "Testing", "Completed"] : ["In Progress", "Completed"];
+  const deliveryStatus = opportunity.deliveryStatus ?? initialOpportunity.deliveryStatus;
+  const displayStatus = getOpportunityDisplayStatus({ status: opportunity.status, deliveryStatus });
+  const deliveryStages = deliveryStatus ? ["In Progress", "Testing", "Completed"] : ["In Progress", "Completed"];
   const rejected = opportunity.status === "Rejected";
   const pending = opportunity.status === "Submitted" || opportunity.status === "Under Review";
   const stages = pending
@@ -237,7 +238,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   return <>
       <button className="back-link" onClick={() => navigate("/opportunities")}>
         <ArrowLeft size={17} /> Back to{" "}
-        {isStaff ? "my opportunities" : "all opportunities"}
+        {isStaff ? "my opportunities" : isEngineer ? "approved opportunities" : "all opportunities"}
       </button>
       <div className="detail-heading">
         <div>
@@ -344,7 +345,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
                 <p>{opportunity.decisionReason}</p>
               </div>}
             </Card>}
-          {project && <Card>
+          {!isStaff && (deliveryStatus || project) && <Card>
               <div className="card-header">
                 <div>
                   <h2>Project delivery</h2>
@@ -353,7 +354,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
                     delivery project.
                   </p>
                 </div>
-                <StatusBadge status={project.status} />
+                <StatusBadge status={deliveryStatus ?? project.status} />
               </div>
               <div className="meta-grid">
                 <div>
@@ -362,12 +363,17 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
                 </div>
                 <div>
                   <span>Delivery status</span>
-                  <strong>{project.status}</strong>
+                  <strong>{deliveryStatus ?? project.status}</strong>
                 </div>
-                <div>
+                {project && <div>
                   <span>Target completion</span>
                   <strong>{project.targetDate}</strong>
-                </div>
+                </div>}
+                {isEngineer && <div>
+                  <Button variant="secondary" onClick={() => navigate(`/projects/${projectId}`)}>
+                    View Project
+                  </Button>
+                </div>}
               </div>
             </Card>}
         </div>

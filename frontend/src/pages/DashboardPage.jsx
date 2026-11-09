@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { useOpportunities } from "../data/useOpportunities";
 import {
@@ -135,7 +136,7 @@ function ManagerDashboard() {
                     <td>{item.department}</td>
                     <td>{item.submittedDate}</td>
                     <td>
-                      <StatusBadge status={item.status} />
+                      <StatusBadge status={getOpportunityDisplayStatus(item)} />
                     </td>
                     <td>
                       <TableAction />

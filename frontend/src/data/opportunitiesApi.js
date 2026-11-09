@@ -46,17 +46,20 @@ function toOpportunity(data) {
   };
 }
 
-export function getStaffOpportunityStatus({ status, deliveryStatus }) {
+export function getOpportunityDisplayStatus({ status, deliveryStatus }) {
   if (status === "Approved" && deliveryStatus && deliveryStatus !== "Not Started") return deliveryStatus;
   return status;
 }
 
-async function getOpportunityPages(email, path, signal) {
-  const first = await request(email, `${path}?pageSize=100`, { signal });
+async function getOpportunityPages(email, path, signal, status) {
+  const query = new URLSearchParams({ pageSize: "100" });
+  if (status) query.set("status", status);
+  const first = await request(email, `${path}?${query}`, { signal });
   const opportunities = new Map(first.items.map((item) => [item.id, item]));
   // The existing search and status tabs filter the whole list.
   for (let page = 2; page <= Math.ceil(first.total / first.pageSize); page++) {
-    const result = await request(email, `${path}?pageSize=100&page=${page}`, { signal });
+    query.set("page", page);
+    const result = await request(email, `${path}?${query}`, { signal });
     for (const item of result.items) opportunities.set(item.id, item);
   }
   return Array.from(opportunities.values(), toOpportunity);
@@ -68,6 +71,10 @@ export function getMyOpportunities(email, signal) {
 
 export function getAllOpportunities(email, signal) {
   return getOpportunityPages(email, "/opportunities", signal);
+}
+
+export function getApprovedOpportunities(email, signal) {
+  return getOpportunityPages(email, "/opportunities", signal, "approved");
 }
 
 export async function getOpportunity(email, id, signal) {
