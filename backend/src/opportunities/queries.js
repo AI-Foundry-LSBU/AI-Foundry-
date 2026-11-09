@@ -29,9 +29,10 @@ export async function findOpportunities(pool, { userId, status, category, priori
   const { rows } = await pool.query(
     `WITH matching AS (
        SELECT o.id, o.title, o.department, o.status, o.priority, o.category, o.submitted_at,
-              o.submitted_by, submitter.name AS submitter_name
+              o.submitted_by, submitter.name AS submitter_name, p.status AS delivery_status
        FROM opportunities o
        JOIN users submitter ON submitter.id = o.submitted_by
+       LEFT JOIN projects p ON p.opportunity_id = o.id
        WHERE ($1::uuid IS NULL OR o.submitted_by = $1)
          AND ($2::text IS NULL OR o.status = $2)
          AND ($3::text IS NULL OR o.category = $3)
@@ -63,7 +64,8 @@ export async function findOpportunity(pool, id) {
   const { rows } = await pool.query(
     `SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
-            to_jsonb(d) AS decision, decider.name AS decider_name, p.id AS project_id
+            to_jsonb(d) AS decision, decider.name AS decider_name,
+            p.id AS project_id, p.status AS delivery_status
      FROM opportunities o
      JOIN users submitter ON submitter.id = o.submitted_by
      LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id

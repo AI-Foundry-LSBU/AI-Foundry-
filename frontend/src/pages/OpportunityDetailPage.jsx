@@ -8,7 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, getStaffOpportunityStatus, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
 import { createDeliveryProject } from "../data/projectsApi";
 import {
@@ -116,14 +116,16 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             Return to dashboard
           </Button>}
     />;
+  const displayStatus = isStaff ? getStaffOpportunityStatus(opportunity) : opportunity.status;
+  const deliveryStages = isStaff && opportunity.deliveryStatus ? ["In Progress", "Testing", "Completed"] : ["In Progress", "Completed"];
   const rejected = opportunity.status === "Rejected";
   const pending = opportunity.status === "Submitted" || opportunity.status === "Under Review";
   const stages = pending
     ? ["Submitted", "Under Review", "Decision"]
     : rejected
       ? ["Submitted", "Under Review", "Rejected"]
-      : ["Submitted", "Under Review", "Approved", "In Progress", "Completed"];
-  const currentIndex = stages.indexOf(opportunity.status);
+      : ["Submitted", "Under Review", "Approved", ...deliveryStages];
+  const currentIndex = stages.indexOf(displayStatus);
   const criterionGuidance = {
     "Strategic alignment": "1 = limited connection to LSBU priorities \xB7 5 = directly advances a key priority",
     "Benefit potential": "1 = limited or uncertain benefit \xB7 5 = substantial, measurable benefit",
@@ -241,7 +243,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
         <div>
           <div className="detail-kicker">
             <span className="mono">{opportunity.id}</span>
-            <StatusBadge status={opportunity.status} />
+            <StatusBadge status={displayStatus} />
           </div>
           <h1>{opportunity.title}</h1>
           <p>
@@ -273,7 +275,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
           <div>
             <h2>Opportunity progress</h2>
             <p>
-              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
+              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through review, decision and delivery."}
             </p>
           </div>
         </div>

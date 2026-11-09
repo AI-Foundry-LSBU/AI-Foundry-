@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { getStaffOpportunityStatus } from "../data/opportunitiesApi";
 import { departments, opportunityStatuses } from "../data/options";
 import { useOpportunities } from "../data/useOpportunities";
 import {
@@ -37,7 +38,9 @@ export function OpportunitiesPage() {
       />
     </div>;
 
-  const statusOptions = ["All", ...opportunityStatuses, ...(useLiveList ? ["In Progress", "Completed"] : [])];
+  const statusOptions = ["All", ...opportunityStatuses];
+  if (useLiveList) statusOptions.push("In Progress", ...(isStaff ? ["Testing"] : []), "Completed");
+  const displayStatus = (item) => isStaff ? getStaffOpportunityStatus(item) : item.status;
   const scoped = useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
   const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(search.toLowerCase());
   const matchesDepartment = (item) => department === "All" || item.department === department;
@@ -46,10 +49,10 @@ export function OpportunitiesPage() {
     (item) => matchesSearch(item) && matchesDepartment(item) && matchesPriority(item)
   );
   const filtered = narrowed.filter(
-    (item) => isEngineer || status === "All" || item.status === status
+    (item) => isEngineer || status === "All" || displayStatus(item) === status
   );
   const statusCount = (item) => narrowed.filter(
-    (opportunity) => item === "All" || opportunity.status === item
+    (opportunity) => item === "All" || displayStatus(opportunity) === item
   ).length;
   return <div className="opportunity-workspace">
       <section className="opportunity-masthead">
@@ -149,7 +152,7 @@ export function OpportunitiesPage() {
     onClick={() => navigate(`/opportunities/${item.id}`)}
   >
               <span className="row-status">
-                <StatusBadge status={item.status} />
+                <StatusBadge status={displayStatus(item)} />
               </span>
               <span className="row-subject">
                 <span className="mono">{item.id}</span>

@@ -1,4 +1,5 @@
 import { requestJson } from "./apiRequest";
+import { deliveryStatusLabels } from "./projectsApi";
 
 const unavailableMessage = "The opportunities API is unavailable. Check that the backend is running and try again.";
 
@@ -29,6 +30,7 @@ function toOpportunity(data) {
   return {
     ...data,
     status: statusLabels[data.status] ?? data.status,
+    deliveryStatus: deliveryStatusLabels[data.deliveryStatus],
     category: categoryLabels[category] ?? "Uncategorised",
     priority: priority ? priority[0].toUpperCase() + priority.slice(1) : "Not set",
     submittedBy: data.submittedBy?.name,
@@ -42,6 +44,11 @@ function toOpportunity(data) {
     decisionReason: data.decision?.reason,
     decisionStatus: statusLabels[data.decision?.decision],
   };
+}
+
+export function getStaffOpportunityStatus({ status, deliveryStatus }) {
+  if (status === "Approved" && deliveryStatus && deliveryStatus !== "Not Started") return deliveryStatus;
+  return status;
 }
 
 async function getOpportunityPages(email, path, signal) {

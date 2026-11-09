@@ -1,14 +1,14 @@
 import { requestJson } from "./apiRequest";
 
 const unavailableMessage = "The projects API is unavailable. Check that the backend is running and try again.";
-const statusLabels = {
+export const deliveryStatusLabels = {
   not_started: "Not Started",
   in_progress: "In Progress",
   testing: "Testing",
   completed: "Completed",
 };
 
-export const deliveryStatuses = Object.values(statusLabels);
+export const deliveryStatuses = Object.values(deliveryStatusLabels);
 
 function displayDate(value) {
   return value ? new Date(value).toLocaleDateString("en-GB", {
@@ -19,7 +19,7 @@ function displayDate(value) {
 function toProject(data) {
   return {
     ...data,
-    status: statusLabels[data.status],
+    status: deliveryStatusLabels[data.status],
     priority: data.priority ? data.priority[0].toUpperCase() + data.priority.slice(1) : "Not set",
     startDate: displayDate(data.startDate),
     targetDate: displayDate(data.targetDate),
@@ -51,6 +51,6 @@ export function createDeliveryProject(email, opportunityId, { startDate, targetD
 
 export function updateDeliveryProject(email, id, { status, ...changes }) {
   return saveProject(email, `/projects/${encodeURIComponent(id)}`, "PATCH", {
-    ...changes, status: Object.keys(statusLabels).find((key) => statusLabels[key] === status),
+    ...changes, status: Object.keys(deliveryStatusLabels).find((key) => deliveryStatusLabels[key] === status),
   });
 }
