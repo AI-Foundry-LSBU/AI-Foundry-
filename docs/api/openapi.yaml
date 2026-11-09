@@ -196,6 +196,22 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Opportunities]
+      operationId: deleteOpportunity
+      summary: Delete one of your opportunities
+      description: |
+        Removes an opportunity submitted by the signed-in user. Another
+        person, including a manager or team member, cannot delete it.
+      responses:
+        '204':
+          description: The opportunity was deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /opportunities/{id}/assessment:
     parameters:

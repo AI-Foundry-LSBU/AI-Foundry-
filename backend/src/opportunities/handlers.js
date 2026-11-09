@@ -1,4 +1,4 @@
-import { findOpportunity, findUserOpportunities, insertOpportunity } from './queries.js';
+import { deleteOpportunity, findOpportunity, findUserOpportunities, insertOpportunity } from './queries.js';
 import { validateListQuery, validateSubmission } from './validation.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -82,5 +82,19 @@ export function getOpportunity(pool) {
     }
 
     return res.json(opportunityResponse(row, row.submitter_name));
+  };
+}
+
+export function removeOpportunity(pool) {
+  return async (req, res) => {
+    const { id } = req.params;
+    const row = uuidPattern.test(id) ? await findOpportunity(pool, id) : undefined;
+    if (!row) {
+      return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
+    }
+    if (row.submitted_by !== req.user.id) return forbidden(res);
+
+    await deleteOpportunity(pool, id, req.user.id);
+    return res.status(204).end();
   };
 }
