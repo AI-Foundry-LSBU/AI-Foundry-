@@ -8,7 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -91,6 +91,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   );
   const [message, setMessage] = useState("");
   const [pendingDecision, setPendingDecision] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [projectForm, setProjectForm] = useState({
     startDate: "",
@@ -228,7 +231,18 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             {opportunity.submittedDate}
           </p>
         </div>
-        {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
+        <div className="detail-actions">
+          {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
+          {isStaff && <Button
+            variant="danger"
+            onClick={() => {
+              setDeleteError("");
+              setConfirmDelete(true);
+            }}
+          >
+            Delete
+          </Button>}
+        </div>
       </div>
       {message && <div className="toast-message">
           <CheckCircle2 size={18} />
@@ -482,6 +496,36 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               </div>}
           </Card>}
       </div>
+      {confirmDelete && <Modal title="Delete opportunity" onClose={() => setConfirmDelete(false)}>
+          <div className="confirm-content">
+            <p>
+              Delete <strong>{opportunity.title}</strong>? It will be removed from My Opportunities.
+            </p>
+            {deleteError && <p role="alert">{deleteError}</p>}
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  setDeleteError("");
+                  try {
+                    await deleteOpportunity(currentUser.email, opportunity.id);
+                    navigate("/opportunities");
+                  } catch (error) {
+                    setDeleteError(error.message);
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete opportunity"}
+              </Button>
+            </div>
+          </div>
+        </Modal>}
       {pendingDecision && <Modal
     title={`Confirm ${pendingDecision.toLowerCase()} decision`}
     onClose={closeDecision}

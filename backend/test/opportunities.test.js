@@ -68,7 +68,12 @@ async function request(server, path, { email, body, rawBody, method, contentType
     headers,
     body: rawBody ?? (body === undefined ? undefined : JSON.stringify(body))
   });
-  return { status: response.status, body: await response.json(), headers: response.headers };
+  const text = await response.text();
+  return {
+    status: response.status,
+    body: text ? JSON.parse(text) : null,
+    headers: response.headers
+  };
 }
 
 test('demo identity rejects missing, unknown and combined emails and resolves seeded roles', async (t) => {
@@ -273,6 +278,31 @@ test('GET opportunity details applies ownership and role rules', async (t) => {
   assert.equal((await request(server, path)).status, 401);
   for (const id of ['not-a-uuid', randomUUID()]) {
     const missing = await request(server, `/api/v1/opportunities/${id}`, { email: staff });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.code, 'NOT_FOUND');
+  }
+});
+
+test('DELETE removes only an opportunity owned by the caller', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const saved = await request(server, '/api/v1/opportunities', { email: staff, body: submission });
+  const path = saved.headers.get('location');
+
+  for (const email of [otherStaff, manager, team]) {
+    const denied = await request(server, path, { method: 'DELETE', email });
+    assert.equal(denied.status, 403);
+    assert.equal(denied.body.code, 'FORBIDDEN');
+  }
+  assert.equal((await request(server, path, { email: staff })).status, 200);
+
+  const deleted = await request(server, path, { method: 'DELETE', email: staff });
+  assert.equal(deleted.status, 204);
+  assert.equal(deleted.body, null);
+  assert.equal((await request(server, path, { email: staff })).status, 404);
+
+  for (const id of ['not-a-uuid', randomUUID()]) {
+    const missing = await request(server, `/api/v1/opportunities/${id}`, { method: 'DELETE', email: staff });
     assert.equal(missing.status, 404);
     assert.equal(missing.body.code, 'NOT_FOUND');
   }

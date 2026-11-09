@@ -1,5 +1,5 @@
 import express from 'express';
-import { assessOpportunity, createOpportunity, decideOpportunity, getOpportunity, listAllOpportunities, listMyOpportunities } from './handlers.js';
+import { assessOpportunity, createOpportunity, decideOpportunity, getOpportunity, listAllOpportunities, listMyOpportunities, removeOpportunity } from './handlers.js';
 
 export function opportunityRoutes(pool) {
   const router = express.Router();
@@ -9,5 +9,6 @@ export function opportunityRoutes(pool) {
   router.post('/opportunities/:id/decision', express.json({ limit: '64kb' }), decideOpportunity(pool));
   router.get('/me/opportunities', listMyOpportunities(pool));
   router.get('/opportunities/:id', getOpportunity(pool));
+  router.delete('/opportunities/:id', removeOpportunity(pool));
   return router;
 }

@@ -122,7 +122,7 @@ Run `npm ci` the first time or after a dependency change. Open the **Local** add
 3. Open **My Opportunities**, refresh the page, and open the saved request. Check that its reference and details match the submission.
 4. To check access, copy the detail URL, sign out, and sign in with `staff2@example.com`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
 
-Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and dashboard use the API.
+Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and deletion actions use the API. The seeded manager account uses the API for assessment and decisions. The engineer view uses sample data.
 
 ## Try the manager queue, assessment and decision
 

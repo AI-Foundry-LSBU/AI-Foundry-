@@ -82,6 +82,22 @@ export async function getOpportunity(email, id, signal) {
   return toOpportunity(data);
 }
 
+export async function deleteOpportunity(email, id) {
+  let response;
+  try {
+    response = await fetch(`/api/v1/opportunities/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "X-User-Email": email }
+    });
+  } catch {
+    throw new Error(unavailableMessage);
+  }
+
+  if (response.status === 204) return;
+  const data = await response.json().catch(() => null);
+  throw Object.assign(new Error(data?.message ?? unavailableMessage), { status: response.status });
+}
+
 export function submitOpportunity(email, data) {
   return request(email, "/opportunities", {
     method: "POST",
