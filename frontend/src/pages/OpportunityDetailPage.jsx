@@ -8,7 +8,8 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { useStaffOpportunities } from "../data/useStaffOpportunities";
+import { saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
   Card,
@@ -19,57 +20,33 @@ import {
   StatusBadge
 } from "../components/ui";
 
+const assessmentFields = {
+  "Strategic alignment": "strategicAlignment",
+  "Benefit potential": "benefitPotential",
+  Complexity: "complexity",
+  "Resource requirements": "resourceRequirements",
+  "Speed to value": "speedToValue",
+};
+
 export function OpportunityDetailPage() {
   const { id } = useParams();
-  const {
-    role,
-    currentUser,
-    opportunities,
-    projects,
-    assessOpportunity,
-    decideOpportunity,
-    createProject
-  } = useApp();
+  const { role, currentUser, opportunities } = useApp();
   const navigate = useNavigate();
-  const isStaff = role === "Staff";
-  const staff = useStaffOpportunities(isStaff ? currentUser.email : null, id);
-  const opportunity = isStaff ? staff.data : opportunities.find((item) => item.id === id);
-  const [priority, setPriority] = useState(
-    opportunity?.priority ?? "Not set"
-  );
-  const [category, setCategory] = useState(
-    opportunity?.category === "Uncategorised" ? "" : opportunity?.category ?? ""
-  );
-  const [ratings, setRatings] = useState(
-    opportunity?.assessment ?? {
-      "Strategic alignment": 0,
-      "Benefit potential": 0,
-      Complexity: 0,
-      "Resource requirements": 0,
-      "Speed to value": 0
-    }
-  );
-  const [assessmentComments, setAssessmentComments] = useState(opportunity?.assessmentComments ?? {});
-  const [decisionReason, setDecisionReason] = useState(
-    opportunity?.decisionReason ?? ""
-  );
-  const [message, setMessage] = useState("");
-  const [pendingDecision, setPendingDecision] = useState(null);
-  const [pipelineOpen, setPipelineOpen] = useState(false);
-  const [projectForm, setProjectForm] = useState({
-    startDate: "",
-    targetDate: ""
-  });
-  if (staff.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
-  if (staff.error && staff.error.status !== 404) {
-    const forbidden = staff.error.status === 403;
+  const sample = opportunities.find((item) => item.id === id);
+  const liveManager = role === "Digital Project Manager" && role === currentUser.role;
+  const isLive = role === "Staff" || (liveManager && !sample);
+  const live = useOpportunities(isLive ? currentUser.email : null, "mine", id);
+  const opportunity = isLive ? live.data : sample;
+  if (live.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
+  if (live.error && live.error.status !== 404) {
+    const forbidden = live.error.status === 403;
     return <div role="alert">
         <EmptyState
           title={forbidden ? "Access restricted" : "Could not load this opportunity"}
-          text={staff.error.message}
+          text={live.error.message}
           action={forbidden
             ? <Button onClick={() => navigate("/opportunities")}>Back to opportunities</Button>
-            : <Button onClick={staff.retry}>Try again</Button>}
+            : <Button onClick={live.retry}>Try again</Button>}
         />
       </div>;
   }
@@ -81,7 +58,46 @@ export function OpportunityDetailPage() {
             Back to opportunities
           </Button>}
     />;
+  return <OpportunityDetail
+    key={`${currentUser.email}:${role}:${id}`}
+    initialOpportunity={opportunity}
+    isLive={isLive}
+  />;
+}
+
+function OpportunityDetail({ initialOpportunity, isLive }) {
+  const { role, currentUser, projects, assessOpportunity, decideOpportunity, createProject } = useApp();
+  const navigate = useNavigate();
+  const isStaff = role === "Staff";
+  const [savedOpportunity, setSavedOpportunity] = useState(null);
+  const opportunity = savedOpportunity ?? initialOpportunity;
+  const [priority, setPriority] = useState(
+    opportunity?.priority ?? "Not set"
+  );
+  const [category, setCategory] = useState(
+    opportunity?.category === "Uncategorised" ? "" : opportunity?.category ?? ""
+  );
+  const [ratings, setRatings] = useState(() => Object.fromEntries(
+    Object.entries(assessmentFields).map(([label, field]) => [
+      label, opportunity.assessment?.[isLive ? field : label] ?? 0,
+    ]),
+  ));
+  const [notes, setNotes] = useState(isLive ? opportunity.assessment?.notes ?? "" : "");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [assessmentComments, setAssessmentComments] = useState(opportunity?.assessmentComments ?? {});
+  const [decisionReason, setDecisionReason] = useState(
+    opportunity?.decisionReason ?? ""
+  );
+  const [message, setMessage] = useState("");
+  const [pendingDecision, setPendingDecision] = useState(null);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    startDate: "",
+    targetDate: ""
+  });
   const isManager = role === "Digital Project Manager";
+  const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
   const project = projects.find((item) => item.opportunityId === opportunity.id);
   const isRestricted = isEngineer && opportunity.status !== "Approved";
@@ -108,18 +124,62 @@ export function OpportunityDetailPage() {
     "Resource requirements": "1 = minimal resource requirement \xB7 5 = major specialist or team commitment",
     "Speed to value": "1 = long lead time to benefit \xB7 5 = value can be demonstrated quickly"
   };
-  const save = () => {
-    const saved = assessOpportunity(
-      opportunity.id,
-      priority,
-      ratings,
-      assessmentComments,
-      category || "Uncategorised"
-    );
-    if (saved) setMessage("Assessment saved successfully.");
+  const save = async () => {
+    if (!isLive) {
+      const saved = assessOpportunity(opportunity.id, priority, ratings, assessmentComments, category || "Uncategorised");
+      if (saved) setMessage("Assessment saved successfully.");
+      return;
+    }
+    if (saving) return;
+    setMessage("");
+    setSaveError("");
+    if (priority === "Not set" || Object.values(ratings).some((rating) => rating === 0)) {
+      setSaveError("Rate all five criteria and select a priority.");
+      return;
+    }
+
+    const scores = Object.fromEntries(Object.entries(assessmentFields).map(([label, field]) => [field, ratings[label]]));
+    setSaving(true);
+    try {
+      const updated = await saveOpportunityAssessment(currentUser.email, opportunity.id, { ...scores, priority, category, notes });
+      setSavedOpportunity(updated);
+      setMessage("Assessment saved successfully.");
+    } catch (error) {
+      setSaveError(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
-  const decide = () => {
-    if (!pendingDecision) return;
+  const openDecision = (decision) => {
+    setSaveError("");
+    setPendingDecision(decision);
+  };
+  const closeDecision = () => {
+    if (saving) return;
+    setSaveError("");
+    setPendingDecision(null);
+  };
+  const decide = async () => {
+    if (!pendingDecision || saving) return;
+    if (isLive) {
+      setMessage("");
+      setSaveError("");
+      setSaving(true);
+      try {
+        const updated = await saveOpportunityDecision(currentUser.email, opportunity.id, {
+          decision: pendingDecision,
+          reason: decisionReason.trim(),
+        });
+        setSavedOpportunity(updated);
+        setMessage(`Opportunity ${updated.status.toLowerCase()}.`);
+        setPendingDecision(null);
+      } catch (error) {
+        setSaveError(error.fields?.reason ?? error.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     assessOpportunity(
       opportunity.id,
       priority,
@@ -237,18 +297,18 @@ export function OpportunityDetailPage() {
                 <p>{opportunity.expectedBenefits}</p>
               </div>}
           </Card>
-          {opportunity.decisionReason && <Card>
+          {(opportunity.decisionStatus || opportunity.decisionReason) && <Card>
               <div className="card-header">
                 <div>
                   <h2>AI Foundry decision</h2>
                   <p>Review outcome and feedback from the assessment team</p>
                 </div>
-                <StatusBadge status={opportunity.status} />
+                <StatusBadge status={opportunity.decisionStatus ?? opportunity.status} />
               </div>
-              <div className="narrative">
+              {opportunity.decisionReason && <div className="narrative">
                 <span>Decision reason</span>
                 <p>{opportunity.decisionReason}</p>
-              </div>
+              </div>}
             </Card>}
           {project && <Card>
               <div className="card-header">
@@ -302,12 +362,14 @@ export function OpportunityDetailPage() {
       [criterion]: rating
     }))}
     aria-label={`${criterion}: ${rating} out of 5`}
+    aria-pressed={value === rating}
+    disabled={saving}
   >
                           {rating}
                         </button>)}
                     </div>
                   </div>
-                  <textarea
+                  {!isLive && <textarea
     rows={2}
     value={assessmentComments[criterion] ?? ""}
     onChange={(event) => setAssessmentComments((current) => ({
@@ -315,7 +377,7 @@ export function OpportunityDetailPage() {
       [criterion]: event.target.value
     }))}
     placeholder={`Optional comments about ${criterion.toLowerCase()}...`}
-  />
+  />}
                 </div>)}
             </div>
             <Field
@@ -324,6 +386,7 @@ export function OpportunityDetailPage() {
   >
               <select
     value={category}
+    disabled={saving}
     onChange={(event) => setCategory(event.target.value)}
   >
                 <option value="">Select category</option>
@@ -336,6 +399,7 @@ export function OpportunityDetailPage() {
   >
               <select
     value={priority}
+    disabled={saving}
     onChange={(event) => setPriority(event.target.value)}
   >
                 <option value="Not set">Select priority</option>
@@ -344,47 +408,54 @@ export function OpportunityDetailPage() {
                 <option>Low</option>
               </select>
             </Field>
-            <Field
+            {isLive ? <Field label="Assessment notes" helper="Optional.">
+              <textarea rows={4} value={notes} maxLength={2000} disabled={saving} onChange={(event) => setNotes(event.target.value)} />
+            </Field> : null}
+            {canDecide && <Field
     label="Decision reason"
-    helper="Record the rationale or feedback that staff should see."
+    helper={isLive ? "Required for rejection. Staff can read the saved reason." : "Record the rationale or feedback that staff should see."}
   >
               <textarea
     rows={4}
     value={decisionReason}
+    maxLength={2000}
+    disabled={saving}
     onChange={(event) => setDecisionReason(event.target.value)}
     placeholder="Explain the decision, key considerations and any next steps..."
   />
-            </Field>
+            </Field>}
             <div className="assessment-note">
-              Illustrative rating controls only. Scoring direction and weighting
-              must be agreed with the client before any automatic calculation.
+              Ratings are recorded individually. Set the priority manually.
             </div>
+            {saveError && !pendingDecision && <div role="alert" className="assessment-note">{saveError}</div>}
             <div className="assessment-actions">
-              <Button variant="secondary" onClick={save}>
-                Save Assessment
+              <Button variant="secondary" onClick={save} disabled={saving}>
+                {saving ? "Saving…" : "Save Assessment"}
               </Button>
+              {canDecide && <>
               <Button
-    onClick={() => setPendingDecision("Approved")}
-    disabled={Boolean(project) || priority === "Not set" || !decisionReason.trim()}
+    onClick={() => openDecision("Approved")}
+    disabled={saving || (!isLive && (Boolean(project) || priority === "Not set" || !decisionReason.trim()))}
   >
                 Approve Opportunity
               </Button>
               <Button
     variant="danger"
-    onClick={() => setPendingDecision("Rejected")}
-    disabled={Boolean(project) || !decisionReason.trim()}
+    onClick={() => openDecision("Rejected")}
+    disabled={saving || Boolean(project) || !decisionReason.trim()}
   >
                 Reject
               </Button>
-              <Button
+              {!isLive && <Button
     variant="ghost"
-    onClick={() => setPendingDecision("Under Review")}
+    onClick={() => openDecision("Under Review")}
     disabled={Boolean(project) || !decisionReason.trim()}
   >
                 Keep Under Review
-              </Button>
+              </Button>}
+              </>}
             </div>
-            {opportunity.status === "Approved" && !project && <div className="pipeline-action">
+            {!isLive && opportunity.status === "Approved" && !project && <div className="pipeline-action">
                 <div>
                   <strong>Ready for delivery</strong>
                   <span>
@@ -413,7 +484,7 @@ export function OpportunityDetailPage() {
       </div>
       {pendingDecision && <Modal
     title={`Confirm ${pendingDecision.toLowerCase()} decision`}
-    onClose={() => setPendingDecision(null)}
+    onClose={closeDecision}
   >
           <div className="confirm-content">
             <p>
@@ -423,20 +494,23 @@ export function OpportunityDetailPage() {
             </p>
             <div className="decision-preview">
               <span>Decision note</span>
-              <p>{decisionReason}</p>
+              <p>{decisionReason.trim() || "No reason entered."}</p>
             </div>
+            {saveError && <div role="alert">{saveError}</div>}
             <div className="modal-actions">
               <Button
     variant="secondary"
-    onClick={() => setPendingDecision(null)}
+    onClick={closeDecision}
+    disabled={saving}
   >
                 Cancel
               </Button>
               <Button
     variant={pendingDecision === "Rejected" ? "danger" : "primary"}
     onClick={decide}
+    disabled={saving}
   >
-                Save Decision
+                {saving ? "Saving…" : "Save Decision"}
               </Button>
             </div>
           </div>

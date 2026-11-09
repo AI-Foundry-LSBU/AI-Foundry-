@@ -7,7 +7,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { departments, opportunityStatuses } from "../data/options";
-import { useStaffOpportunities } from "../data/useStaffOpportunities";
+import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
   EmptyState,
@@ -25,18 +25,20 @@ export function OpportunitiesPage() {
   const [priority, setPriority] = useState("All");
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
-  const staff = useStaffOpportunities(isStaff ? currentUser.email : null);
-  if (staff.loading) return <div role="status"><EmptyState title="Loading your opportunities…" /></div>;
-  if (staff.error) return <div role="alert">
+  const liveManager = role === "Digital Project Manager" && role === currentUser.role;
+  const useLiveList = isStaff || liveManager;
+  const live = useOpportunities(useLiveList ? currentUser.email : null, liveManager ? "all" : "mine");
+  if (live.loading) return <div role="status"><EmptyState title="Loading opportunities…" /></div>;
+  if (live.error) return <div role="alert">
       <EmptyState
-        title="Could not load your opportunities"
-        text={staff.error.message}
-        action={<Button onClick={staff.retry}>Try again</Button>}
+        title={isStaff ? "Could not load your opportunities" : "Could not load all opportunities"}
+        text={live.error.message}
+        action={<Button onClick={live.retry}>Try again</Button>}
       />
     </div>;
 
-  const statusOptions = ["All", ...opportunityStatuses, ...(isStaff ? ["In Progress", "Completed"] : [])];
-  const scoped = isStaff ? staff.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
+  const statusOptions = ["All", ...opportunityStatuses, ...(useLiveList ? ["In Progress", "Completed"] : [])];
+  const scoped = useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
   const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(search.toLowerCase());
   const matchesDepartment = (item) => department === "All" || item.department === department;
   const matchesPriority = (item) => priority === "All" || item.priority === priority;
@@ -167,8 +169,8 @@ export function OpportunitiesPage() {
             </button>)}
         </section> : <div className="worklist-empty">
           <EmptyState
-    title={isStaff && !scoped.length ? "No opportunities yet" : "No opportunities in this view"}
-    text={isStaff && !scoped.length ? "Submit an opportunity and it will appear here." : "Adjust the search or filters to return to the opportunity queue."}
+    title={useLiveList && !scoped.length ? "No opportunities yet" : "No opportunities in this view"}
+    text={useLiveList && !scoped.length ? (isStaff ? "Submit an opportunity and it will appear here." : "Submitted opportunities will appear here.") : "Adjust the search or filters to return to the opportunity queue."}
   />
         </div>}
     </div>;

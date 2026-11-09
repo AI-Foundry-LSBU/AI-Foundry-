@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
   Card,
+  EmptyState,
   PageHeader,
   StatCard,
   StatusBadge,
@@ -29,8 +31,15 @@ function annualSavings(records) {
 }
 
 function ManagerDashboard() {
-  const { opportunities, projects, benefits } = useApp();
+  const { currentUser, opportunities: samples, projects, benefits } = useApp();
   const navigate = useNavigate();
+  const liveManager = currentUser.role === "Digital Project Manager";
+  const live = useOpportunities(liveManager ? currentUser.email : null, "all");
+  if (live.loading) return <div role="status"><EmptyState title="Loading opportunities…" /></div>;
+  if (live.error) return <div role="alert">
+      <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
+    </div>;
+  const opportunities = liveManager ? live.data : samples;
   const statusCounts = [
     "Submitted",
     "Under Review",

@@ -64,7 +64,7 @@ function Layout() {
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
   const nav = isStaff ? staffNav : isEngineer ? engineerNav : managementNav;
-  const user = role === "Staff" ? currentUser : role === "Digital Project Manager" ? { name: "Olivia Bennett", initials: "OB", team: "AI Foundry" } : { name: "Alex Morgan", initials: "AM", team: "AI Foundry" };
+  const user = role === currentUser?.role ? currentUser : role === "Digital Project Manager" ? { name: "Olivia Bennett", initials: "OB", team: "AI Foundry" } : { name: "Alex Morgan", initials: "AM", team: "AI Foundry" };
   const currentTitle = pageTitle(location.pathname, role);
   const changeRole = (nextRole) => {
     setRole(nextRole);
@@ -125,7 +125,7 @@ function Layout() {
     value={role}
     onChange={(event) => changeRole(event.target.value)}
   >
-                <option>Staff</option>
+                {currentUser.role === "Staff" && <option>Staff</option>}
                 <option>Digital Project Manager</option>
                 <option>AI Foundry Engineer</option>
               </select>

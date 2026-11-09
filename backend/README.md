@@ -122,7 +122,20 @@ Run `npm ci` the first time or after a dependency change. Open the **Local** add
 3. Open **My Opportunities**, refresh the page, and open the saved request. Check that its reference and details match the submission.
 4. To check access, copy the detail URL, sign out, and sign in with `staff2@example.com`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
 
-Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and dashboard use the API. The manager and engineer views still use sample data.
+Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and dashboard use the API.
+
+## Try the manager queue, assessment and decision
+
+On an existing database, run `npm run db:migrate` from `backend/` to add the assessments and decisions tables, then restart the API.
+
+1. Submit an opportunity as `staff@example.com`.
+2. Sign out and sign in as `manager@example.com`. Open **All Opportunities** and select the new request.
+3. Rate all five criteria, choose a manual priority, and optionally enter a category and notes. Select **Save Assessment**.
+4. Refresh the page. The ratings and priority should remain, and the request should show **Under Review**.
+5. Enter a decision reason, choose **Approve Opportunity** or **Reject**, then select **Save Decision**. A reason is required for rejection and optional for approval.
+6. Sign back in as the submitting staff user. Check the updated status and the saved reason in **My Opportunities**.
+
+The **View as** menu on a staff account offers sample role previews. Use the seeded manager sign-in to work with live assessments.
 
 ## Files to share
 

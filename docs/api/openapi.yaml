@@ -60,9 +60,11 @@ paths:
       summary: Submit an opportunity (US01)
       description: |
         Saves a new opportunity with the initial status `submitted` and links
-        it to the user making the request. Staff submit with `source` left as
-        `staff_submission`. AI Foundry team members can record an idea from a
-        hackathon by sending `source: hackathon`.
+        it to the user making the request. Ordinary submissions are staff-only
+        and default to `source: staff_submission`. AI Foundry team members can
+        submit with `source: hackathon` and an optional `hackathonName`. The
+        optional `expectedBenefits` field records the anticipated benefits
+        described by the submitter.
       requestBody:
         required: true
         content:
@@ -74,23 +76,30 @@ paths:
               department: Estates
               problemDescription: Confirmation emails are written and sent by hand for every booking.
               proposedImprovement: Send confirmations automatically when a booking is approved.
+              expectedBenefits: Reduce time spent on manual confirmations.
       responses:
         '201':
           description: Opportunity saved. Show the confirmation message.
+          headers:
+            Location:
+              description: Relative URL of the saved opportunity.
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Opportunity'
               example:
-                id: opp_001
+                id: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
                 title: Automate room booking confirmations
                 department: Estates
                 problemDescription: Confirmation emails are written and sent by hand for every booking.
                 proposedImprovement: Send confirmations automatically when a booking is approved.
+                expectedBenefits: Reduce time spent on manual confirmations.
                 status: submitted
                 source: staff_submission
                 submittedBy:
-                  id: usr_001
+                  id: 6bfcbbab-9947-417e-9b04-d76efa7cb9b9
                   name: Demo Staff
                 submittedAt: '2026-11-02T10:15:00Z'
                 updatedAt: '2026-11-02T10:15:00Z'
@@ -100,6 +109,18 @@ paths:
           $ref: '#/components/responses/Unauthorised'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          description: Request body exceeds 64 KiB.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: Unsupported request charset or content encoding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     get:
       tags: [Opportunities]
       operationId: listAllOpportunities
@@ -135,6 +156,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OpportunityPage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorised'
         '403':
@@ -162,7 +185,7 @@ paths:
                 $ref: '#/components/schemas/OpportunityPage'
               example:
                 items:
-                  - id: opp_001
+                  - id: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
                     title: Automate room booking confirmations
                     department: Estates
                     status: submitted
@@ -170,6 +193,8 @@ paths:
                 page: 1
                 pageSize: 20
                 total: 1
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorised'
 
@@ -407,7 +432,7 @@ components:
       required: true
       schema:
         type: string
-      example: opp_001
+      example: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
     Page:
       name: page
       in: query
@@ -426,7 +451,9 @@ components:
     Sort:
       name: sort
       in: query
-      description: A leading minus means descending.
+      description: |
+        A leading minus means descending. Priority is ordered low, medium, high
+        in ascending order, with unset priorities last in either direction.
       schema:
         type: string
         enum: [submittedAt, -submittedAt, priority, -priority]
@@ -532,6 +559,10 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
+        expectedBenefits:
+          type: string
+          maxLength: 500
+          description: Anticipated benefits described by the submitter.
         source:
           $ref: '#/components/schemas/Source'
         hackathonName:
@@ -554,6 +585,10 @@ components:
           $ref: '#/components/schemas/Priority'
         category:
           $ref: '#/components/schemas/Category'
+        submittedBy:
+          allOf:
+            - $ref: '#/components/schemas/UserRef'
+          description: Included in the all-opportunities queue.
         submittedAt:
           type: string
           format: date-time
@@ -571,6 +606,9 @@ components:
           type: string
         proposedImprovement:
           type: string
+        expectedBenefits:
+          type: string
+          maxLength: 500
         status:
           $ref: '#/components/schemas/Status'
         source:

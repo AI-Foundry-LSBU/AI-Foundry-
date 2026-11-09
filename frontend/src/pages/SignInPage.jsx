@@ -78,14 +78,14 @@ export function SignInPage() {
           </div>
           <h2>Sign in to AI Foundry</h2>
           <p>
-            Use a seeded staff demo account to view your submitted opportunities.
+            Use a seeded demo account to view or assess opportunities.
           </p>
           <form onSubmit={submit}>
             <Field
     label="Demo email"
     required
     error={error}
-    helper="Use staff@example.com or staff2@example.com."
+    helper="Use staff@example.com, staff2@example.com or manager@example.com."
   >
               <div className="input-with-icon">
                 <Mail size={16} />
