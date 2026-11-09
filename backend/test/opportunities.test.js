@@ -483,6 +483,15 @@ test('US04 creates one project from an approved opportunity and shares delivery 
   assert.equal((await patch(team, { status: 'in_progress', progress: 25, note: '  Built the first workflow.  ' })).status, 200);
   assert.equal((await patch(team, { status: 'testing', note: 'Testing with the service team.' })).status, 200);
 
+  const ownerView = await request(server, opportunityPath, { email: staff });
+  assert.equal(ownerView.body.status, 'approved');
+  assert.equal(ownerView.body.decision.decision, 'approved');
+  assert.equal(ownerView.body.deliveryStatus, 'testing');
+  assert.equal(ownerView.body.notes, undefined);
+  const ownerList = await request(server, '/api/v1/me/opportunities', { email: staff });
+  assert.equal(ownerList.body.items[0].deliveryStatus, 'testing');
+  assert.equal((await request(server, opportunityPath, { email: otherStaff })).status, 403);
+
   const managerView = await request(server, path, { email: manager });
   assert.equal(managerView.body.status, 'testing');
   assert.equal(managerView.body.progress, 25);

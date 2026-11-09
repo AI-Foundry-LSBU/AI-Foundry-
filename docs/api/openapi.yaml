@@ -681,6 +681,10 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/Status'
+        deliveryStatus:
+          allOf:
+            - $ref: '#/components/schemas/ProjectStatus'
+          description: Current status of the linked project, when present in a read response.
         priority:
           $ref: '#/components/schemas/Priority'
         category:
@@ -711,6 +715,10 @@ components:
           maxLength: 500
         status:
           $ref: '#/components/schemas/Status'
+        deliveryStatus:
+          allOf:
+            - $ref: '#/components/schemas/ProjectStatus'
+          description: Current status of the linked project, when present in a read response.
         source:
           $ref: '#/components/schemas/Source'
         hackathonName:
