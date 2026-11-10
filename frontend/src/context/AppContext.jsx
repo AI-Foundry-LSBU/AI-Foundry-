@@ -12,20 +12,28 @@ import {
 
 const AppContext = createContext(null);
 const demoEmailKey = "ai-foundry.demoEmail";
-const demoStaffNames = {
+const demoNames = {
   "staff@example.com": "Demo Staff",
   "staff2@example.com": "Second Demo Staff",
+  "manager@example.com": "Demo Manager",
+  "team@example.com": "Demo Engineer",
+};
+
+const demoRoles = {
+  "manager@example.com": "Digital Project Manager",
+  "team@example.com": "AI Foundry Engineer",
 };
 
 function demoUser(email) {
   const localPart = email.split("@")[0] || "sarah.smith";
   const name = localPart.split(/[._-]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-  const resolvedName = demoStaffNames[email] ?? (name || "Sarah Smith");
+  const resolvedName = demoNames[email] ?? (name || "Sarah Smith");
   return {
     name: resolvedName,
     email,
+    role: demoRoles[email] ?? "Staff",
     initials: resolvedName.split(" ").map((part) => part[0]).join("").slice(0, 2),
-    team: resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
+    team: demoRoles[email] ? "AI Foundry" : resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
   };
 }
 
@@ -34,15 +42,17 @@ function AppProvider({ children }) {
     const email = sessionStorage.getItem(demoEmailKey);
     return email ? demoUser(email) : null;
   });
-  const [role, setRole] = useState("Staff");
+  const [role, setRole] = useState(currentUser?.role ?? "Staff");
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [projects, setProjects] = useState(initialProjects);
   const [benefits, setBenefits] = useState(initialBenefits);
   const signIn = (email) => {
     const normalizedEmail = email.trim().toLowerCase();
     sessionStorage.setItem(demoEmailKey, normalizedEmail);
-    setCurrentUser(demoUser(normalizedEmail));
-    setRole("Staff");
+    const user = demoUser(normalizedEmail);
+    setCurrentUser(user);
+    setRole(user.role);
+    return user;
   };
   const signOut = () => {
     sessionStorage.removeItem(demoEmailKey);

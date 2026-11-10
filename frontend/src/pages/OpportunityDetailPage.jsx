@@ -8,8 +8,9 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity } from "../data/opportunitiesApi";
-import { useStaffOpportunities } from "../data/useStaffOpportunities";
+import { deleteOpportunity, getOpportunityDisplayStatus, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { useOpportunities } from "../data/useOpportunities";
+import { createDeliveryProject } from "../data/projectsApi";
 import {
   Button,
   Card,
@@ -20,60 +21,33 @@ import {
   StatusBadge
 } from "../components/ui";
 
+const assessmentFields = {
+  "Strategic alignment": "strategicAlignment",
+  "Benefit potential": "benefitPotential",
+  Complexity: "complexity",
+  "Resource requirements": "resourceRequirements",
+  "Speed to value": "speedToValue",
+};
+
 export function OpportunityDetailPage() {
   const { id } = useParams();
-  const {
-    role,
-    currentUser,
-    opportunities,
-    projects,
-    assessOpportunity,
-    decideOpportunity,
-    createProject
-  } = useApp();
+  const { role, currentUser, opportunities } = useApp();
   const navigate = useNavigate();
-  const isStaff = role === "Staff";
-  const staff = useStaffOpportunities(isStaff ? currentUser.email : null, id);
-  const opportunity = isStaff ? staff.data : opportunities.find((item) => item.id === id);
-  const [priority, setPriority] = useState(
-    opportunity?.priority ?? "Not set"
-  );
-  const [category, setCategory] = useState(
-    opportunity?.category === "Uncategorised" ? "" : opportunity?.category ?? ""
-  );
-  const [ratings, setRatings] = useState(
-    opportunity?.assessment ?? {
-      "Strategic alignment": 0,
-      "Benefit potential": 0,
-      Complexity: 0,
-      "Resource requirements": 0,
-      "Speed to value": 0
-    }
-  );
-  const [assessmentComments, setAssessmentComments] = useState(opportunity?.assessmentComments ?? {});
-  const [decisionReason, setDecisionReason] = useState(
-    opportunity?.decisionReason ?? ""
-  );
-  const [message, setMessage] = useState("");
-  const [pendingDecision, setPendingDecision] = useState(null);
-  const [pipelineOpen, setPipelineOpen] = useState(false);
-  const [projectForm, setProjectForm] = useState({
-    startDate: "",
-    targetDate: ""
-  });
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
-  if (staff.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
-  if (staff.error && staff.error.status !== 404) {
-    const forbidden = staff.error.status === 403;
+  const sample = opportunities.find((item) => item.id === id);
+  const liveRole = role === currentUser.role;
+  const isLive = role === "Staff" || (liveRole && (role === "AI Foundry Engineer" || !sample));
+  const live = useOpportunities(isLive ? currentUser.email : null, "mine", id);
+  const opportunity = isLive ? live.data : sample;
+  if (live.loading) return <div role="status"><EmptyState title="Loading opportunity…" /></div>;
+  if (live.error && live.error.status !== 404) {
+    const forbidden = live.error.status === 403;
     return <div role="alert">
         <EmptyState
           title={forbidden ? "Access restricted" : "Could not load this opportunity"}
-          text={staff.error.message}
+          text={live.error.message}
           action={forbidden
             ? <Button onClick={() => navigate("/opportunities")}>Back to opportunities</Button>
-            : <Button onClick={staff.retry}>Try again</Button>}
+            : <Button onClick={live.retry}>Try again</Button>}
         />
       </div>;
   }
@@ -85,9 +59,54 @@ export function OpportunityDetailPage() {
             Back to opportunities
           </Button>}
     />;
+  return <OpportunityDetail
+    key={`${currentUser.email}:${role}:${id}`}
+    initialOpportunity={opportunity}
+    isLive={isLive}
+  />;
+}
+
+function OpportunityDetail({ initialOpportunity, isLive }) {
+  const { role, currentUser, projects, assessOpportunity, decideOpportunity, createProject } = useApp();
+  const navigate = useNavigate();
+  const isStaff = role === "Staff";
+  const [savedOpportunity, setSavedOpportunity] = useState(null);
+  const opportunity = savedOpportunity ?? initialOpportunity;
+  const [priority, setPriority] = useState(
+    opportunity?.priority ?? "Not set"
+  );
+  const [category, setCategory] = useState(
+    opportunity?.category === "Uncategorised" ? "" : opportunity?.category ?? ""
+  );
+  const [ratings, setRatings] = useState(() => Object.fromEntries(
+    Object.entries(assessmentFields).map(([label, field]) => [
+      label, opportunity.assessment?.[isLive ? field : label] ?? 0,
+    ]),
+  ));
+  const [notes, setNotes] = useState(isLive ? opportunity.assessment?.notes ?? "" : "");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [assessmentComments, setAssessmentComments] = useState(opportunity?.assessmentComments ?? {});
+  const [decisionReason, setDecisionReason] = useState(
+    opportunity?.decisionReason ?? ""
+  );
+  const [message, setMessage] = useState("");
+  const [pendingDecision, setPendingDecision] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [pipelineError, setPipelineError] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    startDate: "",
+    targetDate: ""
+  });
   const isManager = role === "Digital Project Manager";
+  const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
-  const project = projects.find((item) => item.opportunityId === opportunity.id);
+  const project = isLive ? undefined : projects.find((item) => item.opportunityId === opportunity.id);
+  const projectId = isLive ? initialOpportunity.projectId : project?.id;
   const isRestricted = isEngineer && opportunity.status !== "Approved";
   if (isRestricted)
     return <EmptyState
@@ -97,14 +116,17 @@ export function OpportunityDetailPage() {
             Return to dashboard
           </Button>}
     />;
+  const deliveryStatus = opportunity.deliveryStatus ?? initialOpportunity.deliveryStatus;
+  const displayStatus = getOpportunityDisplayStatus({ status: opportunity.status, deliveryStatus });
+  const deliveryStages = deliveryStatus ? ["In Progress", "Testing", "Completed"] : ["In Progress", "Completed"];
   const rejected = opportunity.status === "Rejected";
   const pending = opportunity.status === "Submitted" || opportunity.status === "Under Review";
   const stages = pending
     ? ["Submitted", "Under Review", "Decision"]
     : rejected
       ? ["Submitted", "Under Review", "Rejected"]
-      : ["Submitted", "Under Review", "Approved", "In Progress", "Completed"];
-  const currentIndex = stages.indexOf(opportunity.status);
+      : ["Submitted", "Under Review", "Approved", ...deliveryStages];
+  const currentIndex = stages.indexOf(displayStatus);
   const criterionGuidance = {
     "Strategic alignment": "1 = limited connection to LSBU priorities \xB7 5 = directly advances a key priority",
     "Benefit potential": "1 = limited or uncertain benefit \xB7 5 = substantial, measurable benefit",
@@ -112,18 +134,62 @@ export function OpportunityDetailPage() {
     "Resource requirements": "1 = minimal resource requirement \xB7 5 = major specialist or team commitment",
     "Speed to value": "1 = long lead time to benefit \xB7 5 = value can be demonstrated quickly"
   };
-  const save = () => {
-    const saved = assessOpportunity(
-      opportunity.id,
-      priority,
-      ratings,
-      assessmentComments,
-      category || "Uncategorised"
-    );
-    if (saved) setMessage("Assessment saved successfully.");
+  const save = async () => {
+    if (!isLive) {
+      const saved = assessOpportunity(opportunity.id, priority, ratings, assessmentComments, category || "Uncategorised");
+      if (saved) setMessage("Assessment saved successfully.");
+      return;
+    }
+    if (saving) return;
+    setMessage("");
+    setSaveError("");
+    if (priority === "Not set" || Object.values(ratings).some((rating) => rating === 0)) {
+      setSaveError("Rate all five criteria and select a priority.");
+      return;
+    }
+
+    const scores = Object.fromEntries(Object.entries(assessmentFields).map(([label, field]) => [field, ratings[label]]));
+    setSaving(true);
+    try {
+      const updated = await saveOpportunityAssessment(currentUser.email, opportunity.id, { ...scores, priority, category, notes });
+      setSavedOpportunity(updated);
+      setMessage("Assessment saved successfully.");
+    } catch (error) {
+      setSaveError(error.message);
+    } finally {
+      setSaving(false);
+    }
   };
-  const decide = () => {
-    if (!pendingDecision) return;
+  const openDecision = (decision) => {
+    setSaveError("");
+    setPendingDecision(decision);
+  };
+  const closeDecision = () => {
+    if (saving) return;
+    setSaveError("");
+    setPendingDecision(null);
+  };
+  const decide = async () => {
+    if (!pendingDecision || saving) return;
+    if (isLive) {
+      setMessage("");
+      setSaveError("");
+      setSaving(true);
+      try {
+        const updated = await saveOpportunityDecision(currentUser.email, opportunity.id, {
+          decision: pendingDecision,
+          reason: decisionReason.trim(),
+        });
+        setSavedOpportunity(updated);
+        setMessage(`Opportunity ${updated.status.toLowerCase()}.`);
+        setPendingDecision(null);
+      } catch (error) {
+        setSaveError(error.fields?.reason ?? error.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     assessOpportunity(
       opportunity.id,
       priority,
@@ -143,8 +209,22 @@ export function OpportunityDetailPage() {
     }
     setPendingDecision(null);
   };
-  const moveToPipeline = (event) => {
+  const moveToPipeline = async (event) => {
     event.preventDefault();
+    if (creatingProject) return;
+    if (isLive) {
+      setPipelineError("");
+      setCreatingProject(true);
+      try {
+        const created = await createDeliveryProject(currentUser.email, opportunity.id, projectForm);
+        navigate(`/projects/${created.id}`);
+      } catch (error) {
+        setPipelineError(error.fields?.startDate ?? error.fields?.targetDate ?? error.message);
+      } finally {
+        setCreatingProject(false);
+      }
+      return;
+    }
     const created = createProject(
       opportunity.id,
       projectForm.startDate,
@@ -158,13 +238,13 @@ export function OpportunityDetailPage() {
   return <>
       <button className="back-link" onClick={() => navigate("/opportunities")}>
         <ArrowLeft size={17} /> Back to{" "}
-        {isStaff ? "my opportunities" : "all opportunities"}
+        {isStaff ? "my opportunities" : isEngineer ? "approved opportunities" : "all opportunities"}
       </button>
       <div className="detail-heading">
         <div>
           <div className="detail-kicker">
             <span className="mono">{opportunity.id}</span>
-            <StatusBadge status={opportunity.status} />
+            <StatusBadge status={displayStatus} />
           </div>
           <h1>{opportunity.title}</h1>
           <p>
@@ -174,7 +254,7 @@ export function OpportunityDetailPage() {
         </div>
         <div className="detail-actions">
           {opportunity.priority !== "Not set" && <PriorityBadge priority={opportunity.priority} />}
-          {isStaff && <Button
+          {isStaff && !projectId && <Button
             variant="danger"
             onClick={() => {
               setDeleteError("");
@@ -196,7 +276,7 @@ export function OpportunityDetailPage() {
           <div>
             <h2>Opportunity progress</h2>
             <p>
-              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through the review and decision process."}
+              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through review, decision and delivery."}
             </p>
           </div>
         </div>
@@ -252,20 +332,20 @@ export function OpportunityDetailPage() {
                 <p>{opportunity.expectedBenefits}</p>
               </div>}
           </Card>
-          {opportunity.decisionReason && <Card>
+          {(opportunity.decisionStatus || opportunity.decisionReason) && <Card>
               <div className="card-header">
                 <div>
                   <h2>AI Foundry decision</h2>
                   <p>Review outcome and feedback from the assessment team</p>
                 </div>
-                <StatusBadge status={opportunity.status} />
+                <StatusBadge status={opportunity.decisionStatus ?? opportunity.status} />
               </div>
-              <div className="narrative">
+              {opportunity.decisionReason && <div className="narrative">
                 <span>Decision reason</span>
                 <p>{opportunity.decisionReason}</p>
-              </div>
+              </div>}
             </Card>}
-          {project && <Card>
+          {!isStaff && (deliveryStatus || project) && <Card>
               <div className="card-header">
                 <div>
                   <h2>Project delivery</h2>
@@ -274,21 +354,26 @@ export function OpportunityDetailPage() {
                     delivery project.
                   </p>
                 </div>
-                <StatusBadge status={project.status} />
+                <StatusBadge status={deliveryStatus ?? project.status} />
               </div>
               <div className="meta-grid">
                 <div>
                   <span>Project reference</span>
-                  <strong>{project.id}</strong>
+                  <strong>{projectId}</strong>
                 </div>
                 <div>
                   <span>Delivery status</span>
-                  <strong>{project.status}</strong>
+                  <strong>{deliveryStatus ?? project.status}</strong>
                 </div>
-                <div>
+                {project && <div>
                   <span>Target completion</span>
                   <strong>{project.targetDate}</strong>
-                </div>
+                </div>}
+                {isEngineer && <div>
+                  <Button variant="secondary" onClick={() => navigate(`/projects/${projectId}`)}>
+                    View Project
+                  </Button>
+                </div>}
               </div>
             </Card>}
         </div>
@@ -317,12 +402,14 @@ export function OpportunityDetailPage() {
       [criterion]: rating
     }))}
     aria-label={`${criterion}: ${rating} out of 5`}
+    aria-pressed={value === rating}
+    disabled={saving}
   >
                           {rating}
                         </button>)}
                     </div>
                   </div>
-                  <textarea
+                  {!isLive && <textarea
     rows={2}
     value={assessmentComments[criterion] ?? ""}
     onChange={(event) => setAssessmentComments((current) => ({
@@ -330,7 +417,7 @@ export function OpportunityDetailPage() {
       [criterion]: event.target.value
     }))}
     placeholder={`Optional comments about ${criterion.toLowerCase()}...`}
-  />
+  />}
                 </div>)}
             </div>
             <Field
@@ -339,6 +426,7 @@ export function OpportunityDetailPage() {
   >
               <select
     value={category}
+    disabled={saving}
     onChange={(event) => setCategory(event.target.value)}
   >
                 <option value="">Select category</option>
@@ -351,6 +439,7 @@ export function OpportunityDetailPage() {
   >
               <select
     value={priority}
+    disabled={saving}
     onChange={(event) => setPriority(event.target.value)}
   >
                 <option value="Not set">Select priority</option>
@@ -359,67 +448,77 @@ export function OpportunityDetailPage() {
                 <option>Low</option>
               </select>
             </Field>
-            <Field
+            {isLive ? <Field label="Assessment notes" helper="Optional.">
+              <textarea rows={4} value={notes} maxLength={2000} disabled={saving} onChange={(event) => setNotes(event.target.value)} />
+            </Field> : null}
+            {canDecide && <Field
     label="Decision reason"
-    helper="Record the rationale or feedback that staff should see."
+    helper={isLive ? "Required for rejection. Staff can read the saved reason." : "Record the rationale or feedback that staff should see."}
   >
               <textarea
     rows={4}
     value={decisionReason}
+    maxLength={2000}
+    disabled={saving}
     onChange={(event) => setDecisionReason(event.target.value)}
     placeholder="Explain the decision, key considerations and any next steps..."
   />
-            </Field>
+            </Field>}
             <div className="assessment-note">
-              Illustrative rating controls only. Scoring direction and weighting
-              must be agreed with the client before any automatic calculation.
+              Ratings are recorded individually. Set the priority manually.
             </div>
+            {saveError && !pendingDecision && <div role="alert" className="assessment-note">{saveError}</div>}
             <div className="assessment-actions">
-              <Button variant="secondary" onClick={save}>
-                Save Assessment
+              <Button variant="secondary" onClick={save} disabled={saving}>
+                {saving ? "Saving…" : "Save Assessment"}
               </Button>
+              {canDecide && <>
               <Button
-    onClick={() => setPendingDecision("Approved")}
-    disabled={Boolean(project) || priority === "Not set" || !decisionReason.trim()}
+    onClick={() => openDecision("Approved")}
+    disabled={saving || (!isLive && (Boolean(project) || priority === "Not set" || !decisionReason.trim()))}
   >
                 Approve Opportunity
               </Button>
               <Button
     variant="danger"
-    onClick={() => setPendingDecision("Rejected")}
-    disabled={Boolean(project) || !decisionReason.trim()}
+    onClick={() => openDecision("Rejected")}
+    disabled={saving || Boolean(project) || !decisionReason.trim()}
   >
                 Reject
               </Button>
-              <Button
+              {!isLive && <Button
     variant="ghost"
-    onClick={() => setPendingDecision("Under Review")}
-    disabled={Boolean(project) || !decisionReason.trim()}
+    onClick={() => openDecision("Under Review")}
+    disabled={Boolean(projectId) || !decisionReason.trim()}
   >
                 Keep Under Review
-              </Button>
+              </Button>}
+              </>}
             </div>
-            {opportunity.status === "Approved" && !project && <div className="pipeline-action">
+            {opportunity.status === "Approved" && !projectId && <div className="pipeline-action">
                 <div>
                   <strong>Ready for delivery</strong>
                   <span>
-                    Create a linked project when delivery dates are known.
+                    Create a linked project and add planned dates if available.
                   </span>
                 </div>
-                <Button onClick={() => setPipelineOpen(true)}>
+                <Button onClick={() => {
+                  setPipelineError("");
+                  setPipelineOpen(true);
+                }}>
                   Move to Project Delivery
                 </Button>
               </div>}
-            {project && <div className="pipeline-action complete">
+            {projectId && <div className="pipeline-action complete">
                 <div>
-                  <strong>Linked project: {project.id}</strong>
+                  <strong>Linked project: {projectId}</strong>
                   <span>
                     This opportunity is already in Project Delivery.
                   </span>
                 </div>
                 <Button
     variant="secondary"
-    onClick={() => navigate(`/projects/${project.id}`)}
+    onClick={() => navigate(`/projects/${projectId}`)}
   >
                   View Project
                 </Button>
@@ -458,7 +557,7 @@ export function OpportunityDetailPage() {
         </Modal>}
       {pendingDecision && <Modal
     title={`Confirm ${pendingDecision.toLowerCase()} decision`}
-    onClose={() => setPendingDecision(null)}
+    onClose={closeDecision}
   >
           <div className="confirm-content">
             <p>
@@ -468,35 +567,38 @@ export function OpportunityDetailPage() {
             </p>
             <div className="decision-preview">
               <span>Decision note</span>
-              <p>{decisionReason}</p>
+              <p>{decisionReason.trim() || "No reason entered."}</p>
             </div>
+            {saveError && <div role="alert">{saveError}</div>}
             <div className="modal-actions">
               <Button
     variant="secondary"
-    onClick={() => setPendingDecision(null)}
+    onClick={closeDecision}
+    disabled={saving}
   >
                 Cancel
               </Button>
               <Button
     variant={pendingDecision === "Rejected" ? "danger" : "primary"}
     onClick={decide}
+    disabled={saving}
   >
-                Save Decision
+                {saving ? "Saving…" : "Save Decision"}
               </Button>
             </div>
           </div>
         </Modal>}
       {pipelineOpen && <Modal
     title="Move to Project Delivery"
-    onClose={() => setPipelineOpen(false)}
+    onClose={() => { if (!creatingProject) setPipelineOpen(false); }}
   >
           <form className="modal-form" onSubmit={moveToPipeline}>
             <div className="modal-context">
               <span>{opportunity.id}</span>
               <strong>{opportunity.title}</strong>
               <p>
-                A linked project will be created in the Approved column. The
-                original assessment and opportunity record will be preserved.
+                A linked project will be created in the {isLive ? "Not Started" : "Approved"} column.
+                The original assessment and opportunity record will be preserved.
               </p>
             </div>
             <div className="modal-grid">
@@ -521,15 +623,17 @@ export function OpportunityDetailPage() {
   />
               </Field>
             </div>
+            {pipelineError && <p role="alert">{pipelineError}</p>}
             <div className="modal-actions">
               <Button
     type="button"
     variant="secondary"
+    disabled={creatingProject}
     onClick={() => setPipelineOpen(false)}
   >
                 Cancel
               </Button>
-              <Button type="submit">Create Project</Button>
+              <Button type="submit" disabled={creatingProject}>{creatingProject ? "Creating…" : "Create Project"}</Button>
             </div>
           </form>
         </Modal>}

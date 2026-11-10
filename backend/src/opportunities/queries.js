@@ -23,21 +23,29 @@ export const listSortOrders = new Map([
   ['-priority', `${priorityRank} DESC NULLS LAST, submitted_at DESC, id DESC`]
 ]);
 
-export async function findUserOpportunities(pool, userId, { pageSize, offset, sort }) {
+export async function findOpportunities(pool, { userId, status, category, priority, department, pageSize, offset, sort }) {
   // The ORDER BY fragment comes from the fixed map above. User values are parameters.
   const orderBy = listSortOrders.get(sort);
   const { rows } = await pool.query(
-    `SELECT counts.total, items.*
-     FROM (SELECT count(*) AS total FROM opportunities WHERE submitted_by = $1) AS counts
+    `WITH matching AS (
+       SELECT o.id, o.title, o.department, o.status, o.priority, o.category, o.submitted_at,
+              o.submitted_by, submitter.name AS submitter_name, p.status AS delivery_status
+       FROM opportunities o
+       JOIN users submitter ON submitter.id = o.submitted_by
+       LEFT JOIN projects p ON p.opportunity_id = o.id
+       WHERE ($1::uuid IS NULL OR o.submitted_by = $1)
+         AND ($2::text IS NULL OR o.status = $2)
+         AND ($3::text IS NULL OR o.category = $3)
+         AND ($4::text IS NULL OR o.priority = $4)
+         AND ($5::text IS NULL OR o.department = $5)
+     )
+     SELECT counts.total, items.*
+     FROM (SELECT count(*) AS total FROM matching) AS counts
      LEFT JOIN (
-       SELECT id, title, department, status, priority, category, submitted_at
-       FROM opportunities
-       WHERE submitted_by = $1
-       ORDER BY ${orderBy}
-       LIMIT $2 OFFSET $3
+       SELECT * FROM matching ORDER BY ${orderBy} LIMIT $6 OFFSET $7
      ) AS items ON true
      ORDER BY ${orderBy}`,
-    [userId, pageSize, offset]
+    [userId, status, category, priority, department, pageSize, offset]
   );
 
   // The count survives even when a page has no items.
@@ -54,11 +62,93 @@ export async function deleteOpportunity(pool, id, userId) {
 
 export async function findOpportunity(pool, id) {
   const { rows } = await pool.query(
-    `SELECT opportunities.*, users.name AS submitter_name
-     FROM opportunities
-     JOIN users ON users.id = opportunities.submitted_by
-     WHERE opportunities.id = $1`,
+    `SELECT o.*, submitter.name AS submitter_name,
+            to_jsonb(a) AS assessment, assessor.name AS assessor_name,
+            to_jsonb(d) AS decision, decider.name AS decider_name,
+            p.id AS project_id, p.status AS delivery_status
+     FROM opportunities o
+     JOIN users submitter ON submitter.id = o.submitted_by
+     LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id
+     LEFT JOIN users assessor ON assessor.id = a.assessed_by
+     LEFT JOIN opportunity_decisions d ON d.opportunity_id = o.id
+     LEFT JOIN users decider ON decider.id = d.decided_by
+     LEFT JOIN projects p ON p.opportunity_id = o.id
+     WHERE o.id = $1`,
     [id]
+  );
+
+  return rows[0];
+}
+
+export async function saveAssessment(pool, id, managerId, data) {
+  // Update the opportunity and replace its assessment together in one statement.
+  const { rows } = await pool.query(
+    `WITH updated AS (
+       UPDATE opportunities
+       SET priority = $3, category = $4,
+           status = CASE WHEN status = 'submitted' THEN 'in_assessment' ELSE status END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *
+     ), saved AS (
+       INSERT INTO opportunity_assessments (
+         opportunity_id, assessed_by, strategic_alignment, benefit_potential,
+         complexity, resource_requirements, speed_to_value, notes
+       )
+       SELECT id, $2, $5, $6, $7, $8, $9, $10 FROM updated
+       ON CONFLICT (opportunity_id) DO UPDATE
+       SET assessed_by = EXCLUDED.assessed_by,
+           strategic_alignment = EXCLUDED.strategic_alignment,
+           benefit_potential = EXCLUDED.benefit_potential,
+           complexity = EXCLUDED.complexity,
+           resource_requirements = EXCLUDED.resource_requirements,
+           speed_to_value = EXCLUDED.speed_to_value,
+           notes = EXCLUDED.notes,
+           assessed_at = CURRENT_TIMESTAMP
+       RETURNING *
+     )
+     SELECT o.*, submitter.name AS submitter_name,
+            to_jsonb(a) AS assessment, assessor.name AS assessor_name,
+            to_jsonb(d) AS decision, decider.name AS decider_name
+     FROM updated o
+     JOIN saved a ON a.opportunity_id = o.id
+     JOIN users submitter ON submitter.id = o.submitted_by
+     JOIN users assessor ON assessor.id = a.assessed_by
+     LEFT JOIN opportunity_decisions d ON d.opportunity_id = o.id
+     LEFT JOIN users decider ON decider.id = d.decided_by`,
+    [
+      id, managerId, data.priority, data.category, data.strategicAlignment,
+      data.benefitPotential, data.complexity, data.resourceRequirements,
+      data.speedToValue, data.notes
+    ]
+  );
+
+  return rows[0];
+}
+
+export async function saveDecision(pool, id, managerId, { decision, reason }) {
+  // The status guard makes concurrent or repeated decisions fail without overwriting the first one.
+  const { rows } = await pool.query(
+    `WITH updated AS (
+       UPDATE opportunities
+       SET status = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND status = 'in_assessment'
+       RETURNING *
+     ), saved AS (
+       INSERT INTO opportunity_decisions (opportunity_id, decided_by, decision, reason)
+       SELECT id, $2, $3, $4 FROM updated
+       RETURNING *
+     )
+     SELECT o.*, submitter.name AS submitter_name,
+            to_jsonb(a) AS assessment, assessor.name AS assessor_name,
+            to_jsonb(d) AS decision, decider.name AS decider_name
+     FROM updated o
+     JOIN saved d ON d.opportunity_id = o.id
+     JOIN users submitter ON submitter.id = o.submitted_by
+     JOIN users decider ON decider.id = d.decided_by
+     LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id
+     LEFT JOIN users assessor ON assessor.id = a.assessed_by`,
+    [id, managerId, decision, reason]
   );
 
   return rows[0];
