@@ -37,4 +37,4 @@ For Sprint 1, the `X-User-Email` header is used to identify demo users. This is 
 
 The setup steps are in [`backend/README.md`](backend/README.md). That guide creates the local database, starts the API, and runs the website.
 
-Sign in with `staff@example.com`. The project manager and engineer views still use sample data.
+Sign in with `staff@example.com` to submit, track or delete your own requests. Sign in with `manager@example.com` to assess requests, record decisions and move approved opportunities to Project Delivery. Sign in with `team@example.com` to update delivery status and add progress notes.

@@ -76,3 +76,52 @@ export function validateListQuery(query) {
 
   return { data: { page, pageSize, sort, offset }, fields };
 }
+
+const statuses = ['submitted', 'in_assessment', 'approved', 'rejected', 'in_progress', 'completed'];
+const priorities = ['high', 'medium', 'low'];
+const categories = ['automation', 'ai_assistant', 'reporting', 'process_improvement', 'other'];
+
+function validateChoice(value, field, options, fields, required = false) {
+  if ((value !== undefined || required) && !options.includes(value)) {
+    fields[field] = `Choose one of: ${options.join(', ')}.`;
+  }
+}
+
+export function validateOpportunityFilters(query) {
+  const { data, fields } = validateListQuery(query);
+  validateChoice(query.status, 'status', statuses, fields);
+  validateChoice(query.priority, 'priority', priorities, fields);
+  validateChoice(query.category, 'category', categories, fields);
+  const department = readText(query, 'department', 100, fields, query.department !== undefined);
+  return { data: { ...data, status: query.status, priority: query.priority, category: query.category, department }, fields };
+}
+
+const assessmentScores = ['strategicAlignment', 'benefitPotential', 'complexity', 'resourceRequirements', 'speedToValue'];
+
+export function validateAssessment(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { fields: { body: 'Send a JSON object.' } };
+  }
+
+  const fields = {};
+  for (const field of assessmentScores) {
+    const score = input[field];
+    if (!Number.isInteger(score) || score < 1 || score > 5) fields[field] = 'Use an integer from 1 to 5.';
+  }
+  validateChoice(input.priority, 'priority', priorities, fields, true);
+  validateChoice(input.category, 'category', categories, fields);
+  const notes = readText(input, 'notes', 2000, fields);
+  return { data: { ...input, notes }, fields };
+}
+
+export function validateDecision(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { fields: { body: 'Send a JSON object.' } };
+  }
+
+  const fields = {};
+  const { decision } = input;
+  validateChoice(decision, 'decision', ['approved', 'rejected'], fields, true);
+  const reason = readText(input, 'reason', 2000, fields, decision === 'rejected');
+  return { data: { decision, reason }, fields };
+}

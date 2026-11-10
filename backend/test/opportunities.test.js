@@ -41,7 +41,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes'));
 
 after(async () => {
   try {
@@ -58,7 +58,7 @@ async function listen(app) {
   return server;
 }
 
-async function request(server, path, { email, method, body, rawBody, contentType = 'application/json' } = {}) {
+async function request(server, path, { email, body, rawBody, method, contentType = 'application/json' } = {}) {
   const headers = {};
   if (email !== undefined) headers['X-User-Email'] = email;
   if (body !== undefined || rawBody !== undefined) headers['Content-Type'] = contentType;
@@ -315,6 +315,200 @@ test('database setup can be rerun without replacing demo users or reapplying the
   const after = (await pool.query('SELECT email, id FROM users ORDER BY email')).rows;
   assert.equal(before.length, 4);
   assert.deepEqual(after, before);
-  const { rows } = await pool.query('SELECT filename FROM schema_migrations');
-  assert.deepEqual(rows, [{ filename: '001_initial.sql' }]);
+  const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
+  assert.deepEqual(rows.map(({ filename }) => filename), [
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql'
+  ]);
+});
+
+test('only managers and team members can list all opportunities with filters and pagination', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const first = await request(server, path, { email: staff, body: submission });
+  const second = await request(server, path, { email: otherStaff, body: { ...submission, department: 'Library' } });
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+
+  assert.equal((await request(server, path)).status, 401);
+  assert.equal((await request(server, path, { email: staff })).status, 403);
+  const all = await request(server, `${path}?pageSize=1`, { email: manager });
+  assert.equal(all.status, 200);
+  assert.equal(all.body.total, 2);
+  assert.equal(all.body.items.length, 1);
+
+  const filtered = await request(server, `${path}?department=Library&status=submitted`, { email: team });
+  assert.equal(filtered.status, 200);
+  assert.equal(filtered.body.total, 1);
+  assert.equal(filtered.body.items[0].id, second.body.id);
+  assert.deepEqual(filtered.body.items[0].submittedBy, second.body.submittedBy);
+  assert.equal((await request(server, `${path}?status=bad`, { email: manager })).status, 400);
+});
+
+test('managers can save and replace assessments and owners can see the persisted status', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = '/api/v1/opportunities';
+  const created = await request(server, base, { email: staff, body: submission });
+  assert.equal(created.status, 201);
+  const detail = `${base}/${created.body.id}`;
+  const path = `${detail}/assessment`;
+  const ratings = { strategicAlignment: 5, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 1 };
+  const assessment = { ...ratings, priority: 'high', category: 'automation', notes: 'Proceed to review.' };
+  const put = (email, body, url = path) => request(server, url, { email, body, method: 'PUT' });
+
+  assert.equal((await put(staff, assessment)).status, 403);
+  assert.equal((await put(team, assessment)).status, 403);
+  assert.equal((await put(manager, { ...assessment, complexity: 6 })).status, 400);
+  assert.equal((await put(manager, assessment, `${base}/${randomUUID()}/assessment`)).status, 404);
+
+  const saved = await put(manager, assessment);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.status, 'in_assessment');
+  assert.equal(saved.body.assessment.priority, 'high');
+  assert.equal(saved.body.assessment.notes, assessment.notes);
+  assert.equal(saved.body.assessment.assessedBy.name, 'Demo Manager');
+
+  const filtered = await request(server, `${base}?category=automation&priority=high&status=in_assessment`, { email: manager });
+  assert.equal(filtered.body.items[0].id, created.body.id);
+
+  const replaced = await put(manager, { ...ratings, priority: 'low' });
+  assert.equal(replaced.status, 200);
+  const ownerView = await request(server, detail, { email: staff });
+  assert.equal(ownerView.body.status, 'in_assessment');
+  assert.equal(ownerView.body.assessment.priority, 'low');
+  assert.equal(ownerView.body.assessment.category, undefined);
+  assert.equal(ownerView.body.assessment.notes, undefined);
+  assert.equal((await request(server, detail, { email: otherStaff })).status, 403);
+});
+
+test('only managers can record a decision, and decisions persist with the owner-visible status and reason', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const assessment = { strategicAlignment: 5, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 1, priority: 'high' };
+
+  const create = () => request(server, path, { email: staff, body: submission });
+  const assess = (id) => request(server, `${path}/${id}/assessment`, { email: manager, body: assessment, method: 'PUT' });
+  const decide = (id, email, decision, reason) => request(server, `${path}/${id}/decision`, { email, body: { decision, reason } });
+  const details = (id, email) => request(server, `${path}/${id}`, { email });
+
+  const first = await create();
+  assert.equal(first.status, 201);
+  const approvedId = first.body.id;
+  assert.equal((await decide(approvedId, manager, 'approved')).status, 409);
+  assert.equal((await assess(approvedId)).status, 200);
+  assert.equal((await decide(approvedId, undefined, 'approved')).status, 401);
+  assert.equal((await decide(approvedId, staff, 'approved')).status, 403);
+  assert.equal((await decide(approvedId, team, 'approved')).status, 403);
+  assert.equal((await decide(randomUUID(), manager, 'approved')).status, 404);
+  assert.equal((await decide(approvedId, manager, 'invalid')).status, 400);
+
+  const approved = await decide(approvedId, manager, 'approved', 'Saves staff time.');
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.status, 'approved');
+  assert.equal(approved.body.decision.reason, 'Saves staff time.');
+  assert.equal(approved.body.decision.decidedBy.name, 'Demo Manager');
+  assert.equal(approved.body.assessment.priority, 'high');
+  assert.equal((await decide(approvedId, manager, 'rejected', 'Trying again.')).status, 409);
+  assert.deepEqual((await details(approvedId, staff)).body.decision, approved.body.decision);
+  assert.equal((await details(approvedId, otherStaff)).status, 403);
+  assert.deepEqual((await assess(approvedId)).body.decision, approved.body.decision);
+
+  const second = await create();
+  const rejectedId = second.body.id;
+  assert.equal((await assess(rejectedId)).status, 200);
+  const noReason = await decide(rejectedId, manager, 'rejected', '  ');
+  assert.equal(noReason.status, 400);
+  assert.ok(noReason.body.fields.reason);
+
+  const rejected = await decide(rejectedId, manager, 'rejected', 'Already covered.');
+  assert.equal(rejected.status, 200);
+  assert.equal(rejected.body.status, 'rejected');
+  const ownerView = await details(rejectedId, staff);
+  assert.equal(ownerView.body.status, 'rejected');
+  assert.equal(ownerView.body.decision.reason, 'Already covered.');
+  assert.equal((await request(server, `${path}?status=rejected`, { email: manager })).body.items[0].id, rejectedId);
+});
+
+test('US04 creates one project from an approved opportunity and shares delivery updates', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const projects = '/api/v1/projects';
+  const opportunity = await request(server, '/api/v1/opportunities', { email: staff, body: submission });
+  const opportunityPath = opportunity.headers.get('location');
+  const input = { opportunityId: opportunity.body.id, startDate: '2026-11-12', targetDate: '2026-12-01' };
+  const create = (email, body = input) => request(server, projects, { email, body });
+
+  assert.deepEqual((await request(server, projects, { email: team })).body, []);
+  assert.equal((await request(server, projects)).status, 401);
+  assert.equal((await request(server, projects, { email: staff })).status, 403);
+  assert.equal((await create(team)).status, 403);
+  assert.equal((await create(manager, { ...input, opportunityId: randomUUID() })).status, 404);
+  assert.equal((await create(manager, { ...input, startDate: '2026-02-30' })).status, 400);
+  assert.equal((await create(manager, { ...input, targetDate: '2026-11-11' })).status, 400);
+  assert.equal((await create(manager)).status, 409);
+
+  assert.equal((await request(server, `${opportunityPath}/assessment`, {
+    email: manager, method: 'PUT',
+    body: { strategicAlignment: 4, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 5, priority: 'high' }
+  })).status, 200);
+  assert.equal((await request(server, `${opportunityPath}/decision`, {
+    email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
+  })).status, 200);
+  assert.deepEqual((await request(server, projects, { email: team })).body, []);
+
+  const created = await create(manager);
+  assert.equal(created.status, 201);
+  const path = created.headers.get('location');
+  assert.equal(created.body.status, 'not_started');
+  assert.equal(created.body.progress, 0);
+  assert.equal(created.body.description, submission.proposedImprovement);
+  assert.equal(created.body.priority, 'high');
+  assert.equal(created.body.startDate, input.startDate);
+  assert.equal(created.body.targetDate, input.targetDate);
+  assert.deepEqual(created.body.notes, []);
+  assert.equal((await create(manager)).status, 409);
+  assert.equal((await request(server, projects, { email: team })).body[0].id, created.body.id);
+  assert.equal((await request(server, opportunityPath, { email: manager })).body.projectId, created.body.id);
+  assert.equal((await request(server, path, { email: staff })).status, 403);
+  assert.equal((await request(server, path, { email: team })).status, 200);
+  assert.equal((await request(server, `${projects}/bad-id`, { email: team })).status, 404);
+
+  const patch = (email, body) => request(server, path, { email, method: 'PATCH', body });
+  assert.equal((await patch(staff, { status: 'testing' })).status, 403);
+  for (const invalid of [{}, { status: 'approved' }, { progress: 101 }, { note: '   ' }]) {
+    assert.equal((await patch(team, invalid)).status, 400);
+  }
+  assert.equal((await patch(team, { status: 'in_progress', progress: 25, note: '  Built the first workflow.  ' })).status, 200);
+  assert.equal((await patch(team, { status: 'testing', note: 'Testing with the service team.' })).status, 200);
+
+  const ownerView = await request(server, opportunityPath, { email: staff });
+  assert.equal(ownerView.body.status, 'approved');
+  assert.equal(ownerView.body.decision.decision, 'approved');
+  assert.equal(ownerView.body.deliveryStatus, 'testing');
+  assert.equal(ownerView.body.notes, undefined);
+  const ownerList = await request(server, '/api/v1/me/opportunities', { email: staff });
+  assert.equal(ownerList.body.items[0].deliveryStatus, 'testing');
+  assert.equal((await request(server, opportunityPath, { email: otherStaff })).status, 403);
+
+  const managerView = await request(server, path, { email: manager });
+  assert.equal(managerView.body.status, 'testing');
+  assert.equal(managerView.body.progress, 25);
+  assert.deepEqual(managerView.body.notes.map(({ text, author }) => ({ text, author })), [
+    { text: 'Testing with the service team.', author: 'Demo Engineer' },
+    { text: 'Built the first workflow.', author: 'Demo Engineer' }
+  ]);
+  assert.ok(managerView.body.notes.every((note) => note.id && Number.isFinite(Date.parse(note.createdAt))));
+  assert.equal((await patch(team, { note: 'Waiting for feedback.' })).body.status, 'testing');
+  const completed = await patch(team, { status: 'completed' });
+  assert.equal(completed.body.progress, 100);
+  assert.equal(completed.body.notes.length, 3);
+  assert.equal((await request(server, projects, { email: manager })).body[0].status, 'completed');
+
+  const deletion = await request(server, opportunityPath, { email: staff, method: 'DELETE' });
+  assert.equal(deletion.status, 409);
+  assert.equal(deletion.body.code, 'PROJECT_EXISTS');
+  assert.equal((await request(server, opportunityPath, { email: staff })).body.status, 'approved');
+  assert.equal((await request(server, path, { email: manager })).body.notes.length, 3);
 });
