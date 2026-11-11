@@ -152,6 +152,27 @@ opportunity and its approval. An opportunity linked to a project cannot be
 deleted through the staff deletion action. For the API endpoints and fields,
 see [OpenAPI](../docs/api/openapi.yaml).
 
+## Record project benefits (US05)
+
+From `backend/`, run `npm run db:migrate` before restarting the API. Migration
+`005_project_benefits.sql` creates the benefits table and preserves existing
+opportunities, assessments and projects.
+
+1. Sign in with `manager@example.com`. Create a delivery project from an approved opportunity if needed.
+2. Open **Benefits Reporting**, select **Record Benefit**, and choose a real project.
+3. Complete the category, description, measurement, estimated value, actual value, unit and date. Notes are optional. Select **Save Benefit**.
+4. Refresh, select **Edit**, change the values, and select **Update Benefit**. Refresh again and reopen the record to check every field.
+5. Open the linked project to see its associated benefits. Sign in with `team@example.com` to verify read access. Staff and engineers receive 403 if they attempt to create or edit a benefit through the API.
+
+The API provides `GET /api/v1/benefits`, optional filtering with
+`?projectId=...`, `GET /api/v1/benefits/:id`, `POST /api/v1/benefits` and
+`PUT /api/v1/benefits/:id`. Write requests use the fields defined in
+[OpenAPI](../docs/api/openapi.yaml). Values support zero, negative outcomes and
+up to four decimal places. The units match the existing form.
+
+Permissions use the current seeded demo accounts and their backend roles.
+Password and session authentication is a separate Sprint 2 task.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.
