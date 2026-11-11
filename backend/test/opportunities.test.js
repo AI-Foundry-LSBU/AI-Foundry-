@@ -41,7 +41,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits'));
 
 after(async () => {
   try {
@@ -317,7 +317,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql'
   ]);
 });
 
@@ -511,4 +511,122 @@ test('US04 creates one project from an approved opportunity and shares delivery 
   assert.equal(deletion.body.code, 'PROJECT_EXISTS');
   assert.equal((await request(server, opportunityPath, { email: staff })).body.status, 'approved');
   assert.equal((await request(server, path, { email: manager })).body.notes.length, 3);
+});
+
+async function benefitProject(title) {
+  const { rows } = await pool.query(
+    `WITH approved AS (
+       INSERT INTO opportunities (
+         submitted_by, title, department, problem_description, proposed_improvement, status
+       )
+       SELECT id, $1, 'Estates', 'Test issue', 'Test improvement', 'approved'
+       FROM users WHERE email = $2
+       RETURNING id
+     )
+     INSERT INTO projects (opportunity_id, created_by)
+     SELECT approved.id, users.id FROM approved CROSS JOIN users WHERE users.email = $3
+     RETURNING id`,
+    [title, staff, manager]
+  );
+  return rows[0].id;
+}
+
+test('US05 managers create and edit persistent benefits linked to real projects', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const projectId = await benefitProject('First benefits project');
+  const nextProjectId = await benefitProject('Second benefits project');
+  const input = {
+    projectId, category: 'efficiency', description: 'Less administration.',
+    measurement: 'Staff hours saved', estimated: 12.5, actual: 0,
+    unit: 'Hours/month', date: '2026-11-11', notes: 'Pilot estimate.'
+  };
+  const list = (email, suffix = '') => request(server, `/api/v1/benefits${suffix}`, { email });
+  assert.deepEqual((await list(manager)).body, []);
+  assert.equal((await list()).status, 401);
+  assert.equal((await list(staff)).status, 403);
+  for (const email of [undefined, staff, team]) {
+    assert.equal((await request(server, '/api/v1/benefits', { email, body: input })).status, email ? 403 : 401);
+  }
+
+  const created = await request(server, '/api/v1/benefits', { email: manager, body: input });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.project, 'First benefits project');
+  assert.equal(created.body.actual, 0);
+  assert.equal(created.body.estimated, 12.5);
+  assert.equal(created.body.date, '2026-11-11');
+  assert.ok(Number.isFinite(Date.parse(created.body.createdAt)));
+  const path = created.headers.get('location');
+  assert.equal(path, `/api/v1/benefits/${created.body.id}`);
+  assert.deepEqual((await request(server, path, { email: manager })).body, created.body);
+  assert.deepEqual((await list(team, `?projectId=${projectId}`)).body, [created.body]);
+  assert.deepEqual((await list(manager, `?projectId=${nextProjectId}`)).body, []);
+  assert.equal((await list(manager, '?projectId=bad-id')).status, 400);
+
+  for (const email of [undefined, staff]) {
+    assert.equal((await request(server, path, { email })).status, email ? 403 : 401);
+  }
+  for (const email of [undefined, staff, team]) {
+    assert.equal((await request(server, path, { email, method: 'PUT', body: input })).status, email ? 403 : 401);
+  }
+
+  const edit = {
+    ...input, projectId: nextProjectId, category: 'financial', description: 'Updated savings.',
+    measurement: 'Annual saving', estimated: 0, actual: -25.125,
+    unit: 'GBP/year', date: '2026-11-12', notes: ''
+  };
+  const updated = await request(server, path, { email: manager, method: 'PUT', body: edit });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.id, created.body.id);
+  assert.equal(updated.body.createdAt, created.body.createdAt);
+  assert.equal(updated.body.project, 'Second benefits project');
+  assert.equal(updated.body.estimated, 0);
+  assert.equal(updated.body.actual, -25.125);
+  assert.equal(updated.body.notes, '');
+  assert.equal(updated.body.date, '2026-11-12');
+  assert.deepEqual((await request(server, path, { email: manager })).body, updated.body);
+  assert.deepEqual((await list(team, `?projectId=${projectId}`)).body, []);
+  assert.deepEqual((await list(manager, `?projectId=${nextProjectId}`)).body, [updated.body]);
+  const { rows: [stored] } = await pool.query(
+    `SELECT b.*, u.name AS author FROM project_benefits b JOIN users u ON u.id = b.updated_by WHERE b.id = $1`,
+    [created.body.id]
+  );
+  assert.equal(stored.actual, '-25.1250');
+  assert.equal(stored.author, 'Demo Manager');
+});
+
+test('US05 rejects invalid benefit fields and missing records without losing a saved benefit', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const projectId = await benefitProject('Validation project');
+  const input = {
+    projectId, category: 'service', description: 'Faster turnaround.',
+    measurement: 'Processing days saved', estimated: 2.25, actual: 1.125,
+    unit: 'Days', date: '2026-11-11'
+  };
+  const send = (body, path = '/api/v1/benefits', method = 'POST') =>
+    request(server, path, { email: manager, body, method });
+  for (const fields of [
+    { description: ' ' }, { measurement: '' }, { category: 'unknown' }, { unit: 'minutes' },
+    { estimated: '2.25' }, { actual: null }, { actual: 1e20 }, { actual: 0.00001 },
+    { date: '2026-02-30' }, { date: '11/11/2026' }, { notes: '\0' },
+    { projectId: 'not-a-uuid' }, { description: 'a'.repeat(2001) }
+  ]) {
+    const response = await send({ ...input, ...fields });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'VALIDATION_ERROR');
+    assert.ok(Object.keys(response.body.fields).length);
+  }
+  assert.equal((await send([])).status, 400);
+  assert.equal((await send({ ...input, projectId: randomUUID() })).status, 404);
+  const created = await send(input);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.notes, '');
+  const path = created.headers.get('location');
+
+  assert.equal((await send({ ...input, actual: 'invalid' }, path, 'PUT')).status, 400);
+  assert.equal((await send({ ...input, projectId: randomUUID() }, path, 'PUT')).status, 404);
+  assert.deepEqual((await request(server, path, { email: manager })).body, created.body);
+  assert.equal((await send(input, `/api/v1/benefits/${randomUUID()}`, 'PUT')).status, 404);
+  assert.equal((await request(server, '/api/v1/benefits/bad-id', { email: manager })).status, 404);
 });

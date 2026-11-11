@@ -5,6 +5,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { deliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
+import { useBenefits } from "../data/useBenefits";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { projectStatuses } from "../data/options";
 import {
@@ -46,8 +47,9 @@ export function ProjectDetailPage() {
 }
 
 function ProjectDetail({ initialProject, isLive }) {
-  const { currentUser, opportunities, benefits, updateProject } = useApp();
+  const { currentUser, opportunities, updateProject } = useApp();
   const navigate = useNavigate();
+  const benefits = useBenefits(initialProject.id);
   const [savedProject, setSavedProject] = useState(null);
   const project = savedProject ?? initialProject;
   const [status, setStatus] = useState(initialProject.status);
@@ -81,9 +83,7 @@ function ProjectDetail({ initialProject, isLive }) {
   const opportunity = opportunities.find(
     (item) => item.id === project.opportunityId
   );
-  const projectBenefits = benefits.filter(
-    (item) => item.projectId === project.id
-  );
+  const projectBenefits = benefits.data ?? [];
   const addNote = () => {
     if (!note.trim()) return;
     updateProject(project.id, { notes: note }, note);
@@ -172,7 +172,9 @@ function ProjectDetail({ initialProject, isLive }) {
                 {projectBenefits.length} recorded
               </span>
             </div>
-            {projectBenefits.length ? <div className="table-wrap fit-table">
+            {benefits.loading ? <p role="status">Loading benefits…</p> : benefits.error ? <div role="alert">
+              <EmptyState title="Could not load benefits" text={benefits.error.message} action={<Button onClick={benefits.retry}>Try again</Button>} />
+            </div> : projectBenefits.length ? <div className="table-wrap fit-table">
                 <table>
                   <thead>
                     <tr>

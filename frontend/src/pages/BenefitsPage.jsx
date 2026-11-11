@@ -8,6 +8,9 @@ import {
   Plus
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { saveBenefit } from "../data/benefitsApi";
+import { useBenefits } from "../data/useBenefits";
+import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import {
   Button,
   Card,
@@ -21,7 +24,13 @@ import {
 } from "../components/ui";
 
 export function BenefitsPage() {
-  const { role, benefits, projects, addBenefit, updateBenefit } = useApp();
+  const { role, currentUser, addBenefit, updateBenefit } = useApp();
+  const records = useBenefits();
+  const delivery = useDeliveryProjects();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [message, setMessage] = useState("");
   const [open, setOpen] = useState(false);
   const [editingBenefit, setEditingBenefit] = useState(null);
   const [projectFilter, setProjectFilter] = useState("All");
@@ -43,8 +52,19 @@ export function BenefitsPage() {
       title="Access restricted"
       text="Benefits Reporting is available to the AI Foundry team."
     />;
-  const visibleProjects = projects;
-  const scopedBenefits = benefits;
+  if (records.loading || delivery.loading) return <div role="status">
+    <EmptyState title="Loading benefits…" />
+  </div>;
+  const loadError = records.error ?? delivery.error;
+  if (loadError) return <div role="alert">
+    <EmptyState
+      title="Could not load benefits"
+      text={loadError.message}
+      action={<Button onClick={() => { records.retry(); delivery.retry(); }}>Try again</Button>}
+    />
+  </div>;
+  const visibleProjects = delivery.data;
+  const scopedBenefits = records.data;
   const dateOptions = Array.from(
     new Set(
       scopedBenefits.map((item) => item.date.split(" ").slice(1).join(" "))
@@ -76,8 +96,11 @@ export function BenefitsPage() {
   }));
   const timeBenefits = [...filteredBenefits].filter((item) => item.unit === "Hours/month").sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const maxTimeValue = Math.max(...timeBenefits.map((item) => item.actual), 1);
-  const save = (event) => {
+  const save = async (event) => {
     event.preventDefault();
+    if (saving || role !== "Digital Project Manager") return;
+    setSaveError("");
+    setFieldErrors({});
     const data = {
       projectId: form.projectId,
       category: form.category,
@@ -86,13 +109,28 @@ export function BenefitsPage() {
       estimated: Number(form.estimated),
       actual: Number(form.actual),
       unit: form.unit,
-      date: new Date(form.date).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric"
-      }),
+      date: form.date,
       notes: form.notes
     };
+    if (records.isLive) {
+      setSaving(true);
+      try {
+        await saveBenefit(currentUser.email, editingBenefit, data);
+        setOpen(false);
+        setEditingBenefit(null);
+        setMessage(editingBenefit ? "Benefit updated." : "Benefit saved.");
+        records.retry();
+      } catch (error) {
+        setSaveError(error.message);
+        setFieldErrors(error.fields ?? {});
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    data.date = new Date(form.date).toLocaleDateString("en-GB", {
+      day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+    });
     if (editingBenefit) updateBenefit(editingBenefit, data);
     else addBenefit(data);
     setOpen(false);
@@ -100,6 +138,9 @@ export function BenefitsPage() {
   };
   const openBenefitForm = (benefit) => {
     if (role !== "Digital Project Manager") return;
+    setSaveError("");
+    setFieldErrors({});
+    setMessage("");
     if (benefit) {
       const parsedDate = new Date(benefit.date);
       setForm({
@@ -110,7 +151,7 @@ export function BenefitsPage() {
         estimated: String(benefit.estimated),
         actual: String(benefit.actual),
         unit: benefit.unit,
-        date: Number.isNaN(parsedDate.getTime()) ? ( new Date()).toISOString().slice(0, 10) : parsedDate.toISOString().slice(0, 10),
+        date: benefit.recordedOn ?? (Number.isNaN(parsedDate.getTime()) ? ( new Date()).toISOString().slice(0, 10) : parsedDate.toISOString().slice(0, 10)),
         notes: benefit.notes ?? ""
       });
       setEditingBenefit(benefit.id);
@@ -134,10 +175,14 @@ export function BenefitsPage() {
       <PageHeader
     title="Benefits Reporting"
     subtitle="Recorded benefits for AI Foundry projects, with estimated and actual values kept separate."
-    actions={role === "Digital Project Manager" ? <Button icon={Plus} onClick={() => openBenefitForm()}>
+    actions={role === "Digital Project Manager" ? <Button icon={Plus} disabled={!visibleProjects.length} onClick={() => openBenefitForm()}>
               Record Benefit
             </Button> : void 0}
   />
+      {message && <p role="status">{message}</p>}
+      {records.isLive && visibleProjects.length === 0 && <p>
+        Move an approved opportunity to Project Delivery before recording its benefits.
+      </p>}
       <div className="stats-grid four">
         <StatCard
     label="Projects with benefits"
@@ -316,13 +361,16 @@ export function BenefitsPage() {
       </Card>
       {open && <Modal
     title={editingBenefit ? "Update benefit" : "Record a benefit"}
-    onClose={() => setOpen(false)}
+    onClose={() => { if (!saving) setOpen(false); }}
   >
           <form className="modal-form" onSubmit={save}>
+            {saveError && <p role="alert">{saveError}</p>}
             <div className="modal-grid">
-              <Field label="Project" required>
+              <Field label="Project" required error={fieldErrors.projectId}>
                 <select
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.projectId)}
     value={form.projectId}
     onChange={(event) => setForm({ ...form, projectId: event.target.value })}
   >
@@ -332,9 +380,11 @@ export function BenefitsPage() {
                     </option>)}
                 </select>
               </Field>
-              <Field label="Benefit category" required>
+              <Field label="Benefit category" required error={fieldErrors.category}>
                 <select
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.category)}
     value={form.category}
     onChange={(event) => setForm({ ...form, category: event.target.value })}
   >
@@ -349,42 +399,58 @@ export function BenefitsPage() {
   ].map((item) => <option key={item}>{item}</option>)}
                 </select>
               </Field>
-              <Field label="Benefit description" required>
+              <Field label="Benefit description" required error={fieldErrors.description}>
                 <textarea
     rows={3}
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.description)}
     value={form.description}
     onChange={(event) => setForm({ ...form, description: event.target.value })}
     placeholder="Describe the benefit delivered..."
   />
               </Field>
-              <Field label="Measurement" required>
+              <Field label="Measurement" required error={fieldErrors.measurement}>
                 <input
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.measurement)}
     value={form.measurement}
     onChange={(event) => setForm({ ...form, measurement: event.target.value })}
     placeholder="e.g. Staff hours saved per month"
   />
               </Field>
-              <Field label="Estimated value" required>
+              <Field label="Estimated value" required error={fieldErrors.estimated}>
                 <input
     type="number"
+    step="0.0001"
+    min="-999999999.9999"
+    max="999999999.9999"
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.estimated)}
     value={form.estimated}
     onChange={(event) => setForm({ ...form, estimated: event.target.value })}
   />
               </Field>
-              <Field label="Actual value" required>
+              <Field label="Actual value" required error={fieldErrors.actual}>
                 <input
     type="number"
+    step="0.0001"
+    min="-999999999.9999"
+    max="999999999.9999"
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.actual)}
     value={form.actual}
     onChange={(event) => setForm({ ...form, actual: event.target.value })}
   />
               </Field>
-              <Field label="Unit" required>
+              <Field label="Unit" required error={fieldErrors.unit}>
                 <select
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.unit)}
     value={form.unit}
     onChange={(event) => setForm({ ...form, unit: event.target.value })}
   >
@@ -396,17 +462,21 @@ export function BenefitsPage() {
                   <option>Cases/month</option>
                 </select>
               </Field>
-              <Field label="Date recorded" required>
+              <Field label="Date recorded" required error={fieldErrors.date}>
                 <input
     type="date"
     required
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.date)}
     value={form.date}
     onChange={(event) => setForm({ ...form, date: event.target.value })}
   />
               </Field>
-              <Field label="Notes" helper="Optional supporting context.">
+              <Field label="Notes" helper="Optional supporting context." error={fieldErrors.notes}>
                 <textarea
     rows={3}
+    disabled={saving}
+    aria-invalid={Boolean(fieldErrors.notes)}
     value={form.notes}
     onChange={(event) => setForm({ ...form, notes: event.target.value })}
     placeholder="Add validation notes, assumptions or follow-up actions..."
@@ -417,12 +487,13 @@ export function BenefitsPage() {
               <Button
     type="button"
     variant="secondary"
+    disabled={saving}
     onClick={() => setOpen(false)}
   >
                 Cancel
               </Button>
-              <Button type="submit">
-                {editingBenefit ? "Update Benefit" : "Save Benefit"}
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : editingBenefit ? "Update Benefit" : "Save Benefit"}
               </Button>
             </div>
           </form>

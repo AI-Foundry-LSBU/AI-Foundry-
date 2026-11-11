@@ -14,11 +14,10 @@ info:
     product and does not mean that every Must-have story must be completed in
     Sprint 1.
 
-    **Sprint 1 scope:** US01 (submit) and US02 (view my opportunities) are in
-    scope. US03 (view all opportunities) is also a Must-have and is targeted
-    for Sprint 1 if capacity allows. If it is not completed in Sprint 1, it
-    remains in scope for a later sprint. US04-US08 are included here so the
-    frontend and backend can plan ahead, but are not committed to Sprint 1.
+    **Sprint scope:** US01 and US02 form the initial submission and tracking
+    workflow. Sprint 2 adds manager assessment (US03), project delivery
+    (US04), project benefit recording (US05), filtering (US06) and account
+    authentication. The benefits dashboard (US07) is planned for Sprint 3.
 
     **Demo sign-in:** full authentication is outside this demo,
     so every request sends an `X-User-Email` header. The server looks the
@@ -46,7 +45,7 @@ tags:
   - name: Delivery
     description: Tracking project delivery (US04)
   - name: Benefits
-    description: Recording benefits and the dashboard (US07, US08)
+    description: Recording project benefits (US05); dashboard planned for US07
 
 security:
   - demoUser: []
@@ -420,33 +419,39 @@ paths:
         '404':
           $ref: '#/components/responses/ProjectNotFound'
 
-  /opportunities/{id}/benefits:
-    parameters:
-      - $ref: '#/components/parameters/OpportunityId'
+  /benefits:
     get:
       tags: [Benefits]
       operationId: listBenefits
-      summary: List benefits recorded for an opportunity (US07)
+      summary: List saved project benefits (US05)
+      description: Managers and team members can read benefits. Staff access is denied.
+      parameters:
+        - name: projectId
+          in: query
+          description: Optional filter for one project. An empty result is returned if none match.
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
-          description: Benefits for this opportunity.
+          description: Benefits ordered by recorded date, newest first.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Benefit'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorised'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
     post:
       tags: [Benefits]
       operationId: recordBenefit
-      summary: Record a benefit (US07)
-      description: Manager only. Benefits can be recorded at any point after approval.
+      summary: Record a benefit for a delivery project (US05)
+      description: Manager only. The project must already exist.
       requestBody:
         required: true
         content:
@@ -454,14 +459,23 @@ paths:
             schema:
               $ref: '#/components/schemas/BenefitInput'
             example:
+              projectId: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
               category: efficiency
-              description: Saves about two hours of admin per week.
-              value: 2
-              unit: hours per week
-              evidence: Timesheet sample from the Estates team.
+              description: Reduces manual booking administration.
+              measurement: Staff hours saved per month
+              estimated: 12.5
+              actual: 8.25
+              unit: Hours/month
+              date: '2026-11-11'
+              notes: Measured during the pilot.
       responses:
         '201':
-          description: Benefit recorded.
+          description: Benefit saved.
+          headers:
+            Location:
+              description: Relative URL of the saved benefit.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -473,14 +487,70 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/BenefitNotFound'
+        '413':
+          description: Request body exceeds 64 KiB.
+        '415':
+          description: Unsupported request charset or content encoding.
+
+  /benefits/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Benefits]
+      operationId: getBenefit
+      summary: Reopen a saved project benefit (US05)
+      description: Managers and team members can read a benefit.
+      responses:
+        '200':
+          $ref: '#/components/responses/Benefit'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/BenefitNotFound'
+    put:
+      tags: [Benefits]
+      operationId: updateBenefit
+      summary: Edit a project benefit (US05)
+      description: |
+        Manager only. Replaces the editable fields. The project can be changed
+        to another existing project. Omitted or empty notes clear the notes.
+        Zero and negative measurements are supported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BenefitInput'
+      responses:
+        '200':
+          $ref: '#/components/responses/Benefit'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/BenefitNotFound'
+        '413':
+          description: Request body exceeds 64 KiB.
+        '415':
+          description: Unsupported request charset or content encoding.
 
   /benefits/summary:
     get:
       tags: [Benefits]
       operationId: getBenefitsSummary
-      summary: Benefits dashboard data (US08)
-      description: Manager only. Totals across all opportunities.
+      summary: Benefits dashboard data (US07, planned)
+      description: Planned for Sprint 3. Manager only. Totals across saved project benefits.
       responses:
         '200':
           description: Overall impact figures.
@@ -587,6 +657,18 @@ components:
           example:
             code: NOT_FOUND
             message: Opportunity not found.
+    Benefit:
+      description: The saved benefit and its linked project.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Benefit'
+    BenefitNotFound:
+      description: The benefit or selected project does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     ProjectDetail:
       description: The project and all saved notes, newest first.
       content:
@@ -936,35 +1018,58 @@ components:
 
     BenefitInput:
       type: object
-      required: [category, description]
+      required: [projectId, category, description, measurement, estimated, actual, unit, date]
       properties:
+        projectId:
+          type: string
+          format: uuid
         category:
           $ref: '#/components/schemas/BenefitCategory'
         description:
           type: string
+          minLength: 1
           maxLength: 2000
-        value:
-          type: number
-          description: Optional figure, for example hours saved or pounds.
+        measurement:
+          type: string
+          minLength: 1
+          maxLength: 200
+        estimated:
+          $ref: '#/components/schemas/BenefitValue'
+        actual:
+          $ref: '#/components/schemas/BenefitValue'
         unit:
           type: string
-          description: What the value is measured in.
-        evidence:
+          enum: [Hours/month, GBP/year, Percent, Days, Cases/month]
+        date:
+          type: string
+          format: date
+        notes:
           type: string
           maxLength: 2000
+
+    BenefitValue:
+      type: number
+      minimum: -999999999.9999
+      maximum: 999999999.9999
+      multipleOf: 0.0001
+      description: A signed value with up to four decimal places. Zero is a valid recorded value.
 
     Benefit:
       allOf:
         - $ref: '#/components/schemas/BenefitInput'
         - type: object
+          required: [id, project, notes, createdAt, updatedAt]
           properties:
             id:
               type: string
-            opportunityId:
+              format: uuid
+            project:
               type: string
-            recordedBy:
-              $ref: '#/components/schemas/UserRef'
-            recordedAt:
+              description: Title of the linked project.
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
               type: string
               format: date-time
 
