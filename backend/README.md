@@ -173,6 +173,24 @@ up to four decimal places. The units match the existing form.
 Permissions use the current seeded demo accounts and their backend roles.
 Password and session authentication is a separate Sprint 2 task.
 
+## Verify opportunity search and filters (US06)
+
+Sign in as `manager@example.com` and open **All Opportunities**. The website
+loads every API page, then combines the controls across the complete list.
+
+1. Check department, priority and status separately, then combine them with a search by title or opportunity reference.
+2. Try a title in a different letter case and with spaces around it. It should find the same records.
+3. Use a combination with no matching records and check the empty message.
+4. Select **Reset filters**. The search should clear and the complete loaded list should return.
+5. Test a request from an older department name. The department dropdown includes values from saved records as well as the configured departments.
+
+For API verification, `GET /api/v1/opportunities` supports the existing
+`status`, `department` and `priority` query parameters. Each item contains
+the fields needed by the website, with priority absent until assessment.
+The frontend displays this as **Not set**. The opportunity's approval status
+and a project's delivery status are separate fields. The displayed delivery
+filters use `deliveryStatus` from the response.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.

@@ -122,14 +122,23 @@ paths:
     get:
       tags: [Opportunities]
       operationId: listAllOpportunities
-      summary: View all opportunities (US03)
+      summary: View and filter all opportunities (US03, US06)
       description: |
         Returns every opportunity. Only `manager` and `team` users can call this.
         Filters can be combined. Category and priority are set during
-        assessment, so they are empty on new submissions.
+        assessment, so they are empty on new submissions. Each item includes
+        the title, department, opportunity status and any assigned priority.
+        The optional `deliveryStatus` describes a linked delivery project.
+        The website loads all pages and combines search and its displayed
+        status, department and priority filters locally. An unset priority
+        is displayed as "Not set".
       parameters:
         - name: status
           in: query
+          description: |
+            Filters the opportunity status. Approved opportunities stay
+            approved while their separate projects progress through delivery.
+            Use deliveryStatus in response items for delivery tracking.
           schema:
             $ref: '#/components/schemas/Status'
         - name: category
