@@ -41,7 +41,11 @@ export function OpportunitiesPage() {
   const statusOptions = ["All", ...opportunityStatuses];
   if (useLiveList) statusOptions.push("In Progress", "Testing", "Completed");
   const scoped = useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
-  const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(search.toLowerCase());
+  const departmentOptions = Array.from(new Set([
+    ...departments, ...scoped.map((item) => item.department),
+  ])).sort((a, b) => a.localeCompare(b));
+  const searchText = search.trim().toLowerCase();
+  const matchesSearch = (item) => !searchText || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(searchText);
   const matchesDepartment = (item) => department === "All" || item.department === department;
   const matchesPriority = (item) => priority === "All" || item.priority === priority;
   const narrowed = scoped.filter(
@@ -53,6 +57,13 @@ export function OpportunitiesPage() {
   const statusCount = (item) => narrowed.filter(
     (opportunity) => item === "All" || getOpportunityDisplayStatus(opportunity) === item
   ).length;
+  const filtersActive = search !== "" || status !== "All" || department !== "All" || priority !== "All";
+  const resetFilters = () => {
+    setSearch("");
+    setStatus("All");
+    setDepartment("All");
+    setPriority("All");
+  };
   return <div className="opportunity-workspace">
       <section className="opportunity-masthead">
         <div className="masthead-copy">
@@ -120,7 +131,7 @@ export function OpportunitiesPage() {
     aria-label="Department"
   >
                 <option value="All">All departments</option>
-                {departments.map((item) => <option key={item}>{item}</option>)}
+                {departmentOptions.map((item) => <option key={item}>{item}</option>)}
               </select>
             </label>
             <label>
@@ -134,6 +145,9 @@ export function OpportunitiesPage() {
                 {["High", "Medium", "Low", "Not set"].map((item) => <option key={item}>{item}</option>)}
               </select>
             </label>
+            <Button variant="secondary" disabled={!filtersActive} onClick={resetFilters}>
+              Reset filters
+            </Button>
           </div>}
       </section>
 

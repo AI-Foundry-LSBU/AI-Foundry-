@@ -630,3 +630,65 @@ test('US05 rejects invalid benefit fields and missing records without losing a s
   assert.equal((await send(input, `/api/v1/benefits/${randomUUID()}`, 'PUT')).status, 404);
   assert.equal((await request(server, '/api/v1/benefits/bad-id', { email: manager })).status, 404);
 });
+
+test('US06 manager responses support combined filters, pagination and delivery display data', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const records = [];
+  for (const [title, department, priority] of [
+    ['Invoice West', 'Finance', 'high'],
+    ['Archive West', 'Finance', 'low'],
+    ['Invoice East', 'Student Services', 'high'],
+    ['New submission', 'Finance', undefined]
+  ]) {
+    const created = await request(server, path, { email: staff, body: { ...submission, title, department } });
+    assert.equal(created.status, 201);
+    records.push(created.body);
+    if (priority) {
+      assert.equal((await request(server, `${path}/${created.body.id}/assessment`, {
+        email: manager, method: 'PUT',
+        body: { strategicAlignment: 4, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 5, priority }
+      })).status, 200);
+    }
+  }
+  const list = (query = '') => request(server, `${path}${query}`, { email: manager });
+  const all = await list();
+  assert.equal(all.body.total, 4);
+  for (const item of all.body.items) {
+    assert.equal(typeof item.title, 'string');
+    assert.equal(typeof item.department, 'string');
+    assert.equal(typeof item.status, 'string');
+    assert.ok(item.id);
+  }
+  assert.equal(all.body.items.find((item) => item.id === records[3].id).priority, undefined);
+  assert.equal((await list('?department=Finance')).body.total, 3);
+  assert.equal((await list('?priority=high')).body.total, 2);
+  assert.equal((await list('?status=in_assessment')).body.total, 3);
+  const combined = await list('?department=Finance&priority=high&status=in_assessment');
+  assert.equal(combined.status, 200);
+  assert.deepEqual(combined.body.items.map((item) => item.id), [records[0].id]);
+  const page2 = await list('?priority=high&pageSize=1&page=2');
+  assert.equal(page2.body.total, 2);
+  assert.equal(page2.body.items.length, 1);
+  assert.equal((await list('?department=Finance&priority=medium')).body.total, 0);
+  assert.deepEqual((await list('?department=Finance&priority=medium')).body.items, []);
+
+  assert.equal((await request(server, `${path}/${records[1].id}/decision`, {
+    email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
+  })).status, 200);
+  const project = await request(server, '/api/v1/projects', {
+    email: manager, body: { opportunityId: records[1].id }
+  });
+  assert.equal(project.status, 201);
+  assert.equal((await request(server, project.headers.get('location'), {
+    email: team, method: 'PATCH', body: { status: 'testing' }
+  })).status, 200);
+  const delivery = await list('?status=approved&department=Finance&priority=low');
+  assert.equal(delivery.body.total, 1);
+  assert.equal(delivery.body.items[0].status, 'approved');
+  assert.equal(delivery.body.items[0].deliveryStatus, 'testing');
+  assert.equal((await list('?priority=urgent')).status, 400);
+  assert.equal((await list('?department=Finance&department=Student%20Services')).status, 400);
+  assert.equal((await list()).body.total, 4);
+});
