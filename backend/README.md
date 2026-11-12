@@ -252,3 +252,23 @@ this counter is held in the single API process and resets when it restarts.
 Local development uses the Vite API proxy, so frontend requests and session
 cookies use one browser origin. A future deployment needs HTTPS, NODE_ENV=production,
 and its reverse-proxy/cookie settings checked for that hosting arrangement.
+
+## Backend permissions (SCRUM-76)
+
+| Action | Staff | Manager | Engineer (`team`) |
+| --- | --- | --- | --- |
+| Ordinary submission | Yes | No | No |
+| Own submissions and details | Yes | Yes | Yes |
+| Other people's opportunities | No | All | Approved only |
+| Hackathon submission | No | No | Yes, existing API support |
+| Assessment and approve/reject | No | Yes | No |
+| Create a delivery project | No | Yes | No |
+| Read delivery projects and update progress | No | Yes | Yes |
+| Read benefits | No | Yes | Yes |
+| Add or edit benefits | No | Yes | No |
+
+Engineer lists and details also retain access to their own hackathon submissions.
+The visibility rule applies in SQL before list filtering and pagination. Staff
+ownership and manager-only write rules are checked by the backend even if a
+caller bypasses the website. Academic and non-academic staff share the Staff
+permission role; this version does not verify university employment categories.

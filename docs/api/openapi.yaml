@@ -226,7 +226,9 @@ paths:
       operationId: listAllOpportunities
       summary: View and filter all opportunities (US03, US06)
       description: |
-        Returns every opportunity. Only `manager` and `team` users can call this.
+        Managers can list every opportunity. Engineers (`team`) can list approved
+        opportunities and their own submissions, including hackathon entries.
+        This visibility limit applies before filtering, pagination and counting.
         Filters can be combined. Category and priority are set during
         assessment, so they are empty on new submissions. Each item includes
         the title, department, opportunity status and any assigned priority.
@@ -315,8 +317,9 @@ paths:
       operationId: getOpportunity
       summary: View one opportunity in full (US02, US03)
       description: |
-        Staff can only open their own opportunities. Managers and team
-        members can open any.
+        Staff can only open their own opportunities. Managers can open any.
+        Engineers can open approved opportunities and their own submissions,
+        including hackathon entries.
       responses:
         '200':
           description: The full opportunity, including assessment and decision if they exist.
