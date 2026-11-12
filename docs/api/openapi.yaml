@@ -19,11 +19,19 @@ info:
     (US04), project benefit recording (US05), filtering (US06) and account
     authentication. The benefits dashboard (US07) is planned for Sprint 3.
 
-    **Demo sign-in:** full authentication is outside this demo,
-    so every request sends an `X-User-Email` header. The server looks the
-    address up in the seeded demo users to find the person and their role.
-    This is for local/demo development only and must not be used in production.
-    It will be replaced by a bearer token in a later sprint.
+    **Sign-in:** provisioned coursework accounts use email and an application
+    password. Login creates a PostgreSQL-backed session in the HttpOnly
+    `foundry.sid` cookie. Cookies use SameSite=Lax and Secure under HTTPS.
+    Sessions expire after 30 minutes idle or eight hours total. Public account
+    registration and institutional Microsoft sign-in are outside this version.
+    The LSBU-looking usernames are demo identifiers, not university mailboxes.
+    `X-User-Email` never authenticates a request.
+
+    **CSRF:** first call GET /auth/csrf and retain its anonymous session cookie.
+    Send the returned token in X-CSRF-Token when logging in. Login rotates both
+    the session identifier and token. Login and GET /auth/me return the current
+    token for subsequent POST, PUT, PATCH and DELETE requests, including logout.
+    Browser requests use the same origin through the Vite API proxy.
 
     **Roles:** `staff`, `manager` (Digital Project Manager) and `team`
     (AI Foundry team member).
@@ -38,6 +46,8 @@ servers:
     description: Local development
 
 tags:
+  - name: Authentication
+    description: Password login and PostgreSQL sessions
   - name: Opportunities
     description: Submitting and viewing opportunities (US01, US02, US03)
   - name: Assessment
@@ -48,11 +58,103 @@ tags:
     description: Recording project benefits (US05); dashboard planned for US07
 
 security:
-  - demoUser: []
+  - cookieSession: []
 
 paths:
+  /auth/csrf:
+    get:
+      tags: [Authentication]
+      operationId: getCsrfToken
+      summary: Start an anonymous session and obtain a CSRF token
+      security: []
+      responses:
+        '200':
+          description: Retain the response cookie and send this token when logging in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Sign in with a provisioned account
+      security:
+        - cookieSession: []
+          csrfToken: []
+      description: The cookie may belong to an anonymous session from GET /auth/csrf.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  maxLength: 254
+                  example: staff@lsbu.ac.uk
+                password:
+                  type: string
+                  format: password
+                  minLength: 1
+                  maxLength: 128
+      responses:
+        '200':
+          description: Session created; retain the new cookie and CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Incorrect credentials or inactive account. Both return INVALID_CREDENTIALS.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token. Returns CSRF_INVALID.
+        '413':
+          description: Request body exceeds 8 KB.
+        '429':
+          description: Too many failed sign-ins from this IP. Retry after 15 minutes.
+  /auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Get the signed-in account and its current CSRF token
+      responses:
+        '200':
+          description: Current user, with no password hash or session secrets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Destroy the server session and clear its cookie
+      security:
+        - cookieSession: []
+          csrfToken: []
+      responses:
+        '204':
+          description: Signed out. No response body.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          description: Missing or invalid CSRF token. Returns CSRF_INVALID.
   /opportunities:
     post:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Opportunities]
       operationId: submitOpportunity
       summary: Submit an opportunity (US01)
@@ -177,7 +279,7 @@ paths:
       summary: View my opportunities (US02)
       description: |
         Returns only the opportunities submitted by the user named in
-        `X-User-Email`. New submissions appear here straight away, with no
+        the authenticated session. New submissions appear here straight away, with no
         extra steps.
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -229,6 +331,9 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Opportunities]
       operationId: deleteOpportunity
       summary: Delete one of your opportunities
@@ -256,6 +361,9 @@ paths:
     parameters:
       - $ref: '#/components/parameters/OpportunityId'
     put:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Assessment]
       operationId: assessOpportunity
       summary: Assess and prioritise an opportunity (US03)
@@ -290,6 +398,9 @@ paths:
     parameters:
       - $ref: '#/components/parameters/OpportunityId'
     post:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Assessment]
       operationId: decideOpportunity
       summary: Approve or reject an opportunity (US03)
@@ -340,6 +451,9 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Delivery]
       operationId: createProject
       summary: Move an approved opportunity to Project Delivery (US04)
@@ -402,6 +516,9 @@ paths:
         '404':
           $ref: '#/components/responses/ProjectNotFound'
     patch:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Delivery]
       operationId: updateProject
       summary: Update delivery status or add a progress note (US04)
@@ -457,6 +574,9 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     post:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Benefits]
       operationId: recordBenefit
       summary: Record a benefit for a delivery project (US05)
@@ -525,6 +645,9 @@ paths:
         '404':
           $ref: '#/components/responses/BenefitNotFound'
     put:
+      security:
+        - cookieSession: []
+          csrfToken: []
       tags: [Benefits]
       operationId: updateBenefit
       summary: Edit a project benefit (US05)
@@ -584,13 +707,16 @@ paths:
 
 components:
   securitySchemes:
-    demoUser:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: foundry.sid
+      description: Signed opaque session identifier. Session data is stored in PostgreSQL.
+    csrfToken:
       type: apiKey
       in: header
-      name: X-User-Email
-      description: |
-        Demo only. Email of a seeded demo user, for example
-        staff@example.com. Replace with bearer tokens later.
+      name: X-CSRF-Token
+      description: Session-bound CSRF token required for write requests.
 
   parameters:
     OpportunityId:
@@ -640,14 +766,14 @@ components:
               title: Title is required.
               department: Department is required.
     Unauthorised:
-      description: No known user. Check the X-User-Email header.
+      description: No valid session, or the account has been disabled. Sign in again.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
           example:
             code: UNAUTHORISED
-            message: Unknown user.
+            message: Your session has ended. Please sign in.
     Forbidden:
       description: This user's role cannot do that.
       content:
@@ -701,6 +827,36 @@ components:
             message: This opportunity cannot move to that status from its current one.
 
   schemas:
+    CsrfToken:
+      type: object
+      required: [csrfToken]
+      properties:
+        csrfToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+    AuthUser:
+      type: object
+      required: [id, email, name, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [staff, manager, team]
+    AuthSession:
+      type: object
+      required: [user, csrfToken]
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthUser'
+        csrfToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     Status:
       type: string
       enum: [submitted, in_assessment, approved, rejected, in_progress, completed]
