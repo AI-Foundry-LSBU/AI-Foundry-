@@ -170,7 +170,7 @@ On an existing database, run `npm run db:migrate` from `backend/` to add the ass
 5. Enter a decision reason, choose **Approve Opportunity** or **Reject**, then select **Save Decision**. A reason is required for rejection and optional for approval.
 6. Sign back in as the submitting staff user. Check the updated status and the saved reason in **My Opportunities**.
 
-Sign out and use the Manager account to assess requests. Account roles are assigned in the database; the role preview menu is removed by SCRUM-77.
+Sign out and use the Manager account to assess requests. Account roles are assigned in the database. Sign-in reads the role returned by the API; there is no role preview menu.
 
 ## Try Project Delivery (US04)
 
@@ -252,6 +252,19 @@ this counter is held in the single API process and resets when it restarts.
 Local development uses the Vite API proxy, so frontend requests and session
 cookies use one browser origin. A future deployment needs HTTPS, NODE_ENV=production,
 and its reverse-proxy/cookie settings checked for that hosting arrangement.
+
+## Sign-in integration (SCRUM-77)
+
+The existing sign-in screen now accepts email and password. It handles incorrect
+credentials, failed connections and repeated submissions. On refresh, the app
+asks `GET /auth/me` for the account instead of trusting browser storage. The
+request helper sends cookies and CSRF tokens for opportunities, projects and
+benefits, including deletion. Logout ends the database session. A server response
+of 401 returns the user to sign-in; an unavailable service offers a retry.
+
+To verify the integration, try a wrong password, then sign in with the correct
+one, submit a request and refresh. Sign out and check it with the second Staff
+account. Use the Manager and Engineer accounts to run the US03–US05 checks above.
 
 ## Backend permissions (SCRUM-76)
 

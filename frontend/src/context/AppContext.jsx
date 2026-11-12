@@ -1,5 +1,6 @@
 import {
   createContext,
+  useEffect,
   useContext,
   useMemo,
   useState,
@@ -9,55 +10,48 @@ import {
   initialOpportunities,
   initialProjects,
 } from "../data/mockData";
+import { endSession, getCurrentSession, signInWithPassword } from '../data/authApi';
+import { clearSessionToken } from '../data/apiRequest';
 
 const AppContext = createContext(null);
-const demoEmailKey = "ai-foundry.demoEmail";
-const demoNames = {
-  "staff@example.com": "Demo Staff",
-  "staff2@example.com": "Second Demo Staff",
-  "manager@example.com": "Demo Manager",
-  "team@example.com": "Demo Engineer",
-};
-
-const demoRoles = {
-  "manager@example.com": "Digital Project Manager",
-  "team@example.com": "AI Foundry Engineer",
-};
-
-function demoUser(email) {
-  const localPart = email.split("@")[0] || "sarah.smith";
-  const name = localPart.split(/[._-]/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-  const resolvedName = demoNames[email] ?? (name || "Sarah Smith");
-  return {
-    name: resolvedName,
-    email,
-    role: demoRoles[email] ?? "Staff",
-    initials: resolvedName.split(" ").map((part) => part[0]).join("").slice(0, 2),
-    team: demoRoles[email] ? "AI Foundry" : resolvedName === "Sarah Smith" ? "Student Services" : "LSBU Staff"
-  };
-}
-
 function AppProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(() => {
-    const email = sessionStorage.getItem(demoEmailKey);
-    return email ? demoUser(email) : null;
-  });
-  const [role, setRole] = useState(currentUser?.role ?? "Staff");
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const role = currentUser?.role ?? 'Staff';
+  useEffect(() => {
+    const controller = new AbortController();
+    setAuthLoading(true);
+    setAuthError('');
+    sessionStorage.removeItem('ai-foundry.demoEmail');
+    getCurrentSession(controller.signal).then(
+      (user) => { if (!controller.signal.aborted) setCurrentUser(user); },
+      (error) => {
+        if (controller.signal.aborted) return;
+        setCurrentUser(null);
+        if (error.status !== 401) setAuthError(error.message);
+      }
+    ).finally(() => { if (!controller.signal.aborted) setAuthLoading(false); });
+    return () => controller.abort();
+  }, [authAttempt]);
+  useEffect(() => {
+    const clear = () => { clearSessionToken(); setCurrentUser(null); };
+    window.addEventListener('ai-foundry:session-ended', clear);
+    return () => window.removeEventListener('ai-foundry:session-ended', clear);
+  }, []);
   const [opportunities, setOpportunities] = useState(initialOpportunities);
   const [projects, setProjects] = useState(initialProjects);
   const [benefits, setBenefits] = useState(initialBenefits);
-  const signIn = (email) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    sessionStorage.setItem(demoEmailKey, normalizedEmail);
-    const user = demoUser(normalizedEmail);
+  const signIn = async (email, password) => {
+    const user = await signInWithPassword(email, password);
     setCurrentUser(user);
-    setRole(user.role);
     return user;
   };
-  const signOut = () => {
-    sessionStorage.removeItem(demoEmailKey);
+  const signOut = async () => {
+    try { await endSession(); } catch (error) { if (error.status !== 401) throw error; }
+    clearSessionToken();
     setCurrentUser(null);
-    setRole("Staff");
   };
   const assessOpportunity = (id, priority, assessment, comments, category) => {
     if (role !== "Digital Project Manager") return false;
@@ -179,10 +173,12 @@ function AppProvider({ children }) {
     () => ({
       isAuthenticated: Boolean(currentUser),
       currentUser,
+      authLoading,
+      authError,
+      retrySession: () => setAuthAttempt((value) => value + 1),
       signIn,
       signOut,
       role,
-      setRole,
       opportunities,
       projects,
       benefits,
@@ -193,7 +189,7 @@ function AppProvider({ children }) {
       addBenefit,
       updateBenefit
     }),
-    [currentUser, role, opportunities, projects, benefits]
+    [currentUser, role, opportunities, projects, benefits, authLoading, authError]
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
