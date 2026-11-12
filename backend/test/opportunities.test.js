@@ -230,7 +230,7 @@ test('GET opportunity details applies ownership and role rules', async (t) => {
   assert.equal(saved.status, 201);
   const path = saved.headers.get('location');
 
-  for (const email of [staff, manager, team]) {
+  for (const email of [staff, manager]) {
     const detail = await request(server, path, { email });
     assert.equal(detail.status, 200);
     assert.deepEqual(detail.body, saved.body);
@@ -238,6 +238,7 @@ test('GET opportunity details applies ownership and role rules', async (t) => {
   const forbidden = await request(server, path, { email: otherStaff });
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.code, 'FORBIDDEN');
+  assert.equal((await request(server, path, { email: team })).status, 403);
   assert.equal((await request(server, path)).status, 401);
   for (const id of ['not-a-uuid', randomUUID()]) {
     const missing = await request(server, `/api/v1/opportunities/${id}`, { email: staff });
@@ -284,7 +285,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   ]);
 });
 
-test('only managers and team members can list all opportunities with filters and pagination', async (t) => {
+test('manager opportunity lists support filters and pagination', async (t) => {
   const server = await listen(createApp(pool));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const path = '/api/v1/opportunities';
@@ -300,12 +301,34 @@ test('only managers and team members can list all opportunities with filters and
   assert.equal(all.body.total, 2);
   assert.equal(all.body.items.length, 1);
 
-  const filtered = await request(server, `${path}?department=Library&status=submitted`, { email: team });
+  const filtered = await request(server, `${path}?department=Library&status=submitted`, { email: manager });
   assert.equal(filtered.status, 200);
   assert.equal(filtered.body.total, 1);
   assert.equal(filtered.body.items[0].id, second.body.id);
   assert.deepEqual(filtered.body.items[0].submittedBy, second.body.submittedBy);
   assert.equal((await request(server, `${path}?status=bad`, { email: manager })).status, 400);
+});
+
+test('engineer list and detail access includes approved requests and own hackathon submissions only', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const privateRequest = await request(server, path, { email: staff, body: submission });
+  const approved = await request(server, path, { email: otherStaff, body: { ...submission, department: 'Library' } });
+  const own = await request(server, path, { email: team, body: { ...submission, source: 'hackathon', hackathonName: 'Test event' } });
+  await pool.query("UPDATE opportunities SET status = 'approved' WHERE id = $1", [approved.body.id]);
+
+  const visible = await request(server, path, { email: team });
+  assert.equal(visible.body.total, 2);
+  assert.deepEqual(new Set(visible.body.items.map(({ id }) => id)), new Set([approved.body.id, own.body.id]));
+  assert.equal((await request(server, `${path}/${privateRequest.body.id}`, { email: team })).status, 403);
+  assert.equal((await request(server, `${path}/${approved.body.id}`, { email: team })).status, 200);
+  assert.equal((await request(server, `${path}/${own.body.id}`, { email: team })).status, 200);
+  assert.equal((await request(server, `${path}?status=submitted`, { email: team })).body.total, 1);
+  assert.equal((await request(server, `${path}?status=approved&department=Library`, { email: team })).body.total, 1);
+  assert.equal((await request(server, `${path}?pageSize=1&page=2`, { email: team })).body.total, 2);
+  assert.equal((await request(server, path, { email: manager })).body.total, 3);
+  assert.equal((await request(server, `${path}/${approved.body.id}`, { email: staff })).status, 403);
 });
 
 test('managers can save and replace assessments and owners can see the persisted status', async (t) => {

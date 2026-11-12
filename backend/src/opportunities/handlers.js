@@ -1,5 +1,6 @@
 import { deleteOpportunity, findOpportunities, findOpportunity, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
 import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
+import { canReadOpportunity } from '../auth/permissions.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -113,7 +114,9 @@ export function listAllOpportunities(pool) {
     const { data, fields } = validateOpportunityFilters(req.query);
     if (Object.keys(fields).length) return invalidRequest(res, fields);
 
-    return sendOpportunityPage(pool, res, data, true);
+    return sendOpportunityPage(pool, res, {
+      ...data, engineerId: req.user.role === 'team' ? req.user.id : undefined
+    }, true);
   };
 }
 
@@ -125,7 +128,7 @@ export function getOpportunity(pool) {
       return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
     }
 
-    if (req.user.role === 'staff' && row.submitted_by !== req.user.id) {
+    if (!canReadOpportunity(req.user, row)) {
       return forbidden(res);
     }
 
