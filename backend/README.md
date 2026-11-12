@@ -2,6 +2,27 @@
 
 This guide sets up a local database and runs the API for opportunities and project delivery. Run the first-time steps once on each computer.
 
+## Update an existing checkout for password login
+
+Stop the backend with Ctrl+C. From the project folder run:
+
+```bash
+cd backend
+npm ci
+npm run auth:configure
+npm run db:migrate
+npm run db:seed
+npm start
+```
+
+Keep your existing `.env`. The configure command adds a random session signing
+secret and four random passwords to it without changing your database URLs or
+existing passwords. The migration renames the old demo usernames and keeps the
+same user IDs, opportunities, assessments, projects and benefits.
+
+These changes include separate SCRUM-75, SCRUM-76 and SCRUM-77 commits. Apply all
+three before checking sign-in in the browser.
+
 ## Start it after the first setup
 
 If you have already completed the first-time setup, make sure PostgreSQL is running. On a Mac with Postgres.app, open the app to check. Open Terminal or PowerShell in the project folder and run:
@@ -69,6 +90,7 @@ Each teammate creates their own `.env` on their own computer. If you followed th
 While still in `backend/`, run these lines one at a time.
 
 ```bash
+npm run auth:configure
 npm run db:migrate
 npm run db:seed
 npm start
@@ -76,34 +98,47 @@ npm start
 
 The migration creates the `users` and `opportunities` tables. The seed command adds the demo users. You can repeat these two commands without duplicating the tables or the users. After `npm start`, keep that window open while you test.
 
-## Check the Sprint 1 API
+## Accounts and passwords
 
-Keep the backend running and open another Terminal window. The commands below use Bash or Zsh. On Windows PowerShell, you can use the automated checks described below. The demo header tells the API which test user is making the request.
+The usernames below belong only to this coursework website. They do not create
+LSBU mailboxes, send email, or use university passwords.
 
-**US01 · Submit an Opportunity.** Paste this block to save a sample request:
+| Username | Role | Password in your private backend/.env |
+| --- | --- | --- |
+| staff@lsbu.ac.uk | Staff | DEMO_STAFF_PASSWORD |
+| staff2@lsbu.ac.uk | Second Staff user | DEMO_STAFF2_PASSWORD |
+| manager@lsbu.ac.uk | Digital Project Manager | DEMO_MANAGER_PASSWORD |
+| engineer@lsbu.ac.uk | AI Foundry Engineer | DEMO_ENGINEER_PASSWORD |
 
-```bash
-curl -i http://127.0.0.1:3000/api/v1/opportunities \
-  -H 'X-User-Email: staff@example.com' \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Sprint 1 test request","department":"Estates","problemDescription":"Room bookings are confirmed by hand.","proposedImprovement":"Send booking confirmations automatically."}'
-```
+Open `backend/.env` in your editor to find the generated values after the `=`
+sign. On a Mac, run `open -e .env` while inside `backend/`. Enter the matching
+email and password on the sign-in page. There is no public registration.
 
-Look for `201 Created`, a generated `id`, and a status of `submitted`.
+Each teammate runs setup against their own local database and gets their own
+random passwords. To reset one, change its value in `.env` to 12–128 characters
+and run `npm run db:seed`. That account's existing sessions will stop working.
+Unchanged passwords and user IDs are preserved when seeding is repeated.
 
-**US02 · Track a Request.** Run the next command and look for the same ID under `items`.
+A database password in DATABASE_URL is separate from these website passwords.
+Do not share your complete `.env` or commit it. Share only the required demo
+credentials privately if teammates use the same running instance.
 
-```bash
-curl -i -H 'X-User-Email: staff@example.com' http://127.0.0.1:3000/api/v1/me/opportunities
-```
+## Check the API
 
-To open one saved request, replace `YOUR_ID` below with the ID from the submission response. The other demo staff user, `staff2@example.com`, receives `403` when trying to open that request.
+`X-User-Email` is no longer accepted as authentication. All existing API endpoints
+require the session cookie. Writes also require `X-CSRF-Token`. The website
+handles both automatically after SCRUM-77.
 
-```bash
-curl -i -H 'X-User-Email: staff@example.com' http://127.0.0.1:3000/api/v1/opportunities/YOUR_ID
-```
+For a direct API client, call `GET /api/v1/auth/csrf`, retain the cookie, and send
+the returned token in `X-CSRF-Token` with `POST /api/v1/auth/login` and JSON
+`{ "email": "staff@lsbu.ac.uk", "password": "YOUR_LOCAL_PASSWORD" }`. Retain the
+new cookie and CSRF token from login. `GET /api/v1/auth/me` restores the current
+user; `POST /api/v1/auth/logout` destroys the session.
 
-For the automated checks, run `npm test` from `backend/` while PostgreSQL is running. The example `.env` includes `TEST_DATABASE_URL`. The tests create and remove their own schema, separate from your demo requests.
+Run `npm test` from `backend/` with PostgreSQL running. TEST_DATABASE_URL must
+point to a local database in which the test user can create schemas. Tests use
+isolated schemas and their own fixture passwords, never your demo password
+values. They cover authentication and the existing US01–US06 APIs.
 
 ## Check the Sprint 1 workflow in the browser
 
@@ -117,10 +152,10 @@ npm run dev
 
 Run `npm ci` the first time or after a dependency change. Open the **Local** address printed by Vite.
 
-1. Sign in with `staff@example.com`.
+1. Sign in with `staff@lsbu.ac.uk`.
 2. Open **Submit Opportunity**, fill in the form, and submit it. The reference on the confirmation screen is the ID of the saved database row.
 3. Open **My Opportunities**, refresh the page, and open the saved request. Check that its reference and details match the submission.
-4. To check access, copy the detail URL, sign out, and sign in with `staff2@example.com`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
+4. To check access, copy the detail URL, sign out, and sign in with `staff2@lsbu.ac.uk`. The first user's request should be absent from this list, and opening the copied URL should show **Access restricted**.
 
 Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you run the backend on a different port, set `AI_FOUNDRY_API_TARGET` to its URL before starting Vite. The staff submission, list, detail, and deletion actions use the API. The seeded manager account uses the API for assessment and decisions. The manager and engineer use the API for Project Delivery.
 
@@ -128,14 +163,14 @@ Vite forwards local API requests to `http://127.0.0.1:3000` by default. If you r
 
 On an existing database, run `npm run db:migrate` from `backend/` to add the assessments and decisions tables, then restart the API.
 
-1. Submit an opportunity as `staff@example.com`.
-2. Sign out and sign in as `manager@example.com`. Open **All Opportunities** and select the new request.
+1. Submit an opportunity as `staff@lsbu.ac.uk`.
+2. Sign out and sign in as `manager@lsbu.ac.uk`. Open **All Opportunities** and select the new request.
 3. Rate all five criteria, choose a manual priority, and optionally enter a category and notes. Select **Save Assessment**.
 4. Refresh the page. The ratings and priority should remain, and the request should show **Under Review**.
 5. Enter a decision reason, choose **Approve Opportunity** or **Reject**, then select **Save Decision**. A reason is required for rejection and optional for approval.
 6. Sign back in as the submitting staff user. Check the updated status and the saved reason in **My Opportunities**.
 
-The **View as** menu on a staff account offers sample role previews. Use the seeded manager sign-in to work with live assessments.
+Sign out and use the Manager account to assess requests. Account roles are assigned in the database. Sign-in reads the role returned by the API; there is no role preview menu.
 
 ## Try Project Delivery (US04)
 
@@ -143,15 +178,110 @@ On an existing database, run `npm run db:migrate` from `backend/`, then restart
 the backend. The migration creates `projects` and `project_progress_notes`.
 It preserves existing opportunities and assessments.
 
-1. As `manager@example.com`, open an approved opportunity and select **Move to Project Delivery**. Optionally add planned dates, then select **Create Project**. The project starts as **Not Started**.
-2. Sign in as `team@example.com`, open the project in **Project Delivery**, choose **In Progress** or **Testing**, and enter a note. Select **Save Progress** and refresh.
-3. Sign in as `manager@example.com`. Open the same project in **Project Delivery** and confirm the status and note are there.
+1. As `manager@lsbu.ac.uk`, open an approved opportunity and select **Move to Project Delivery**. Optionally add planned dates, then select **Create Project**. The project starts as **Not Started**.
+2. Sign in as `engineer@lsbu.ac.uk`, open the project in **Project Delivery**, choose **In Progress** or **Testing**, and enter a note. Select **Save Progress** and refresh.
+3. Sign in as `manager@lsbu.ac.uk`. Open the same project in **Project Delivery** and confirm the status and note are there.
 
 Each opportunity can have one project. Creating the project preserves the
 opportunity and its approval. An opportunity linked to a project cannot be
 deleted through the staff deletion action. For the API endpoints and fields,
 see [OpenAPI](../docs/api/openapi.yaml).
 
+## Record project benefits (US05)
+
+From `backend/`, run `npm run db:migrate` before restarting the API. Migration
+`005_project_benefits.sql` creates the benefits table and preserves existing
+opportunities, assessments and projects.
+
+1. Sign in with `manager@lsbu.ac.uk`. Create a delivery project from an approved opportunity if needed.
+2. Open **Benefits Reporting**, select **Record Benefit**, and choose a real project.
+3. Complete the category, description, measurement, estimated value, actual value, unit and date. Notes are optional. Select **Save Benefit**.
+4. Refresh, select **Edit**, change the values, and select **Update Benefit**. Refresh again and reopen the record to check every field.
+5. Open the linked project to see its associated benefits. Sign in with `engineer@lsbu.ac.uk` to verify read access. Staff and engineers receive 403 if they attempt to create or edit a benefit through the API.
+
+The API provides `GET /api/v1/benefits`, optional filtering with
+`?projectId=...`, `GET /api/v1/benefits/:id`, `POST /api/v1/benefits` and
+`PUT /api/v1/benefits/:id`. Write requests use the fields defined in
+[OpenAPI](../docs/api/openapi.yaml). Values support zero, negative outcomes and
+up to four decimal places. The units match the existing form.
+
+Permissions use the signed-in account and its database role. Passwords and
+PostgreSQL sessions replace the old demo-email header.
+
+## Verify opportunity search and filters (US06)
+
+Sign in as `manager@lsbu.ac.uk` and open **All Opportunities**. The website
+loads every API page, then combines the controls across the complete list.
+
+1. Check department, priority and status separately, then combine them with a search by title or opportunity reference.
+2. Try a title in a different letter case and with spaces around it. It should find the same records.
+3. Use a combination with no matching records and check the empty message.
+4. Select **Reset filters**. The search should clear and the complete loaded list should return.
+5. Test a request from an older department name. The department dropdown includes values from saved records as well as the configured departments.
+
+For API verification, `GET /api/v1/opportunities` supports the existing
+`status`, `department` and `priority` query parameters. Each item contains
+the fields needed by the website, with priority absent until assessment.
+The frontend displays this as **Not set**. The opportunity's approval status
+and a project's delivery status are separate fields. The displayed delivery
+filters use `deliveryStatus` from the response.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.
+
+## How authentication is organised
+
+- `src/auth/configure.js` adds missing random settings to your private `.env`.
+- `src/auth/passwords.js` hashes and verifies passwords with Argon2id.
+- `src/auth/sessions.js` sets up PostgreSQL sessions, checks account activity and
+  expiry, and verifies CSRF tokens so another website cannot submit a write
+  using your browser session.
+- `src/auth/routes.js` handles CSRF setup, login, current-user lookup and logout.
+- `db/migrations/006_authentication.sql` adds password/account fields and the
+  session table, and renames the four existing demo usernames.
+- `src/db/setup.js` seeds the users and password hashes without replacing IDs.
+
+Sessions expire after 30 minutes idle or eight hours total. Browser refresh and
+backend restarts preserve a valid session while SESSION_SECRET stays the same.
+Login rotates the session identifier and CSRF token. Disabled accounts and
+password resets invalidate existing sessions. The API rereads the database role
+on protected requests. Login allows up to 20 failed attempts per IP in 15 minutes;
+this counter is held in the single API process and resets when it restarts.
+
+Local development uses the Vite API proxy, so frontend requests and session
+cookies use one browser origin. A future deployment needs HTTPS, NODE_ENV=production,
+and its reverse-proxy/cookie settings checked for that hosting arrangement.
+
+## Sign-in integration (SCRUM-77)
+
+The existing sign-in screen now accepts email and password. It handles incorrect
+credentials, failed connections and repeated submissions. On refresh, the app
+asks `GET /auth/me` for the account instead of trusting browser storage. The
+request helper sends cookies and CSRF tokens for opportunities, projects and
+benefits, including deletion. Logout ends the database session. A server response
+of 401 returns the user to sign-in; an unavailable service offers a retry.
+
+To verify the integration, try a wrong password, then sign in with the correct
+one, submit a request and refresh. Sign out and check it with the second Staff
+account. Use the Manager and Engineer accounts to run the US03–US05 checks above.
+
+## Backend permissions (SCRUM-76)
+
+| Action | Staff | Manager | Engineer (`team`) |
+| --- | --- | --- | --- |
+| Ordinary submission | Yes | No | No |
+| Own submissions and details | Yes | Yes | Yes |
+| Other people's opportunities | No | All | Approved only |
+| Hackathon submission | No | No | Yes, existing API support |
+| Assessment and approve/reject | No | Yes | No |
+| Create a delivery project | No | Yes | No |
+| Read delivery projects and update progress | No | Yes | Yes |
+| Read benefits | No | Yes | Yes |
+| Add or edit benefits | No | Yes | No |
+
+Engineer lists and details also retain access to their own hackathon submissions.
+The visibility rule applies in SQL before list filtering and pagination. Staff
+ownership and manager-only write rules are checked by the backend even if a
+caller bypasses the website. Academic and non-academic staff share the Staff
+permission role; this version does not verify university employment categories.

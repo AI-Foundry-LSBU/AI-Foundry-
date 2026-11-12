@@ -140,8 +140,10 @@ function formatCurrency(value) {
   }).format(value);
 }
 function formatMeasure(value, unit) {
-  const amount = Number(value).toLocaleString("en-GB");
-  if (unit === "GBP/year") return `${formatCurrency(value)}/year`;
+  const amount = Number(value).toLocaleString("en-GB", { maximumFractionDigits: 4 });
+  if (unit === "GBP/year") return `${new Intl.NumberFormat("en-GB", {
+    style: "currency", currency: "GBP", maximumFractionDigits: 4,
+  }).format(value)}/year`;
   if (unit === "Hours/month") return `${amount} hours/month`;
   if (unit === "Percent") return `${amount}%`;
   if (unit === "Days") return `${amount} days`;

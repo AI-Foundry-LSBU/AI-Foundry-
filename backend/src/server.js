@@ -11,9 +11,11 @@ try {
 
   pool = createPool();
   await pool.query('SELECT 1');
-  const server = createApp(pool).listen(port, '127.0.0.1', () => {
+  const app = createApp(pool);
+  const server = app.listen(port, '127.0.0.1', () => {
     console.log(`AI Foundry API listening at http://127.0.0.1:${port}/api/v1`);
   });
+  server.on('close', () => app.locals.sessionStore.close());
 
   server.on('error', async (error) => {
     console.error('HTTP server failed:', error.code ?? error.name);

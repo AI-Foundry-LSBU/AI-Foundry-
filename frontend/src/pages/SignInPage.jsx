@@ -14,17 +14,28 @@ import {
 export function SignInPage() {
   const { isAuthenticated, currentUser, signIn } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("staff@example.com");
+  const [email, setEmail] = useState("staff@lsbu.ac.uk");
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   if (isAuthenticated) return <Navigate to={currentUser.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities"} replace />;
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    if (!email.trim() || !email.includes("@")) {
-      setError("Enter a valid demo email address.");
+    if (isSubmitting) return;
+    if (!email.trim() || !email.includes("@") || !password) {
+      setError("Enter your email and password.");
       return;
     }
-    const user = signIn(email);
-    navigate(user.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities");
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const user = await signIn(email, password);
+      navigate(user.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities");
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   return <div className="sign-in-shell studio-login">
       <div className="sign-in-brand login-brand">
@@ -78,29 +89,42 @@ export function SignInPage() {
           </div>
           <h2>Sign in to AI Foundry</h2>
           <p>
-            Use a seeded demo account to work with opportunities or projects.
+            Use a coursework demo account to sign in.
           </p>
           <form onSubmit={submit}>
             <Field
-    label="Demo email"
+    label="Email"
     required
-    error={error}
-    helper="Use staff@example.com, staff2@example.com, manager@example.com or team@example.com."
+    helper="Demo accounts: staff@lsbu.ac.uk, staff2@lsbu.ac.uk, manager@lsbu.ac.uk or engineer@lsbu.ac.uk."
   >
               <div className="input-with-icon">
                 <Mail size={16} />
                 <input
     type="email"
+    name="email"
+    aria-label="Email"
+    autoComplete="username"
+    required
+    maxLength={254}
     value={email}
     onChange={(event) => {
       setEmail(event.target.value);
       setError("");
     }}
-    placeholder="staff@example.com"
+    placeholder="staff@lsbu.ac.uk"
   />
               </div>
             </Field>
-            <Button type="submit">Sign In</Button>
+            <Field label="Password" required helper="Use the password provided for this demo account.">
+              <div className="input-with-icon">
+                <LockKeyhole size={16} />
+                <input type="password" name="password" aria-label="Password" autoComplete="current-password"
+                  required maxLength={128} value={password}
+                  onChange={(event) => { setPassword(event.target.value); setError(''); }} />
+              </div>
+            </Field>
+            {error && <p role="alert" className="error-text">{error}</p>}
+            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Sign In'}</Button>
           </form>
         </section>
       </main>

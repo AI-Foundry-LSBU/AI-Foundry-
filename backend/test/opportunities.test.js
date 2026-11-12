@@ -2,16 +2,15 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { after, before, beforeEach, test } from 'node:test';
-import express from 'express';
 import pg from 'pg';
-import { createApp } from '../src/app.js';
-import { migrate, seed } from '../src/db/setup.js';
-import { resolveDemoUser } from '../src/middleware/resolveDemoUser.js';
+import { createApp as buildApp } from '../src/app.js';
+import { migrate, seed as seedUsers } from '../src/db/setup.js';
+import { authenticatedRequest as request, sessionSecret, testPasswords } from '../test-support/client.js';
 
-const staff = 'staff@example.com';
-const otherStaff = 'staff2@example.com';
-const manager = 'manager@example.com';
-const team = 'team@example.com';
+const staff = 'staff@lsbu.ac.uk';
+const otherStaff = 'staff2@lsbu.ac.uk';
+const manager = 'manager@lsbu.ac.uk';
+const team = 'engineer@lsbu.ac.uk';
 const submission = {
   title: 'Automate booking emails',
   department: 'Estates & Facilities',
@@ -19,6 +18,8 @@ const submission = {
   proposedImprovement: 'Send confirmations when a booking is approved.'
 };
 const schema = `foundry_test_${randomUUID().replaceAll('-', '')}`;
+const createApp = (pool) => buildApp(pool, { sessionSecret, sessionSchema: schema, pruneSessionInterval: false });
+const seed = (pool) => seedUsers(pool, testPasswords);
 let admin;
 let schemaCreated = false;
 let pool;
@@ -41,7 +42,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits'));
 
 after(async () => {
   try {
@@ -57,44 +58,6 @@ async function listen(app) {
   await once(server, 'listening');
   return server;
 }
-
-async function request(server, path, { email, body, rawBody, method, contentType = 'application/json' } = {}) {
-  const headers = {};
-  if (email !== undefined) headers['X-User-Email'] = email;
-  if (body !== undefined || rawBody !== undefined) headers['Content-Type'] = contentType;
-
-  const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-    method: method ?? (body !== undefined || rawBody !== undefined ? 'POST' : 'GET'),
-    headers,
-    body: rawBody ?? (body === undefined ? undefined : JSON.stringify(body))
-  });
-  const text = await response.text();
-  return {
-    status: response.status,
-    body: text ? JSON.parse(text) : null,
-    headers: response.headers
-  };
-}
-
-test('demo identity rejects missing, unknown and combined emails and resolves seeded roles', async (t) => {
-  const app = express();
-  app.get('/identity', resolveDemoUser(pool), (req, res) => res.json(req.user));
-  const server = await listen(app);
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-
-  for (const email of [undefined, '', 'unknown@example.com', `${staff},${manager}`]) {
-    const result = await request(server, '/identity', { email });
-    assert.equal(result.status, 401);
-    assert.equal(result.body.code, 'UNAUTHORISED');
-  }
-
-  for (const [email, role] of [[staff.toUpperCase(), 'staff'], [otherStaff, 'staff'], [manager, 'manager'], [team, 'team']]) {
-    const result = await request(server, '/identity', { email });
-    assert.equal(result.status, 200);
-    assert.equal(result.body.role, role);
-    assert.ok(result.body.id);
-  }
-});
 
 test('POST saves the submission with server-owned metadata and preserves expected benefits', async (t) => {
   const server = await listen(createApp(pool));
@@ -267,7 +230,7 @@ test('GET opportunity details applies ownership and role rules', async (t) => {
   assert.equal(saved.status, 201);
   const path = saved.headers.get('location');
 
-  for (const email of [staff, manager, team]) {
+  for (const email of [staff, manager]) {
     const detail = await request(server, path, { email });
     assert.equal(detail.status, 200);
     assert.deepEqual(detail.body, saved.body);
@@ -275,6 +238,7 @@ test('GET opportunity details applies ownership and role rules', async (t) => {
   const forbidden = await request(server, path, { email: otherStaff });
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.code, 'FORBIDDEN');
+  assert.equal((await request(server, path, { email: team })).status, 403);
   assert.equal((await request(server, path)).status, 401);
   for (const id of ['not-a-uuid', randomUUID()]) {
     const missing = await request(server, `/api/v1/opportunities/${id}`, { email: staff });
@@ -317,11 +281,11 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql'
   ]);
 });
 
-test('only managers and team members can list all opportunities with filters and pagination', async (t) => {
+test('manager opportunity lists support filters and pagination', async (t) => {
   const server = await listen(createApp(pool));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const path = '/api/v1/opportunities';
@@ -337,12 +301,34 @@ test('only managers and team members can list all opportunities with filters and
   assert.equal(all.body.total, 2);
   assert.equal(all.body.items.length, 1);
 
-  const filtered = await request(server, `${path}?department=Library&status=submitted`, { email: team });
+  const filtered = await request(server, `${path}?department=Library&status=submitted`, { email: manager });
   assert.equal(filtered.status, 200);
   assert.equal(filtered.body.total, 1);
   assert.equal(filtered.body.items[0].id, second.body.id);
   assert.deepEqual(filtered.body.items[0].submittedBy, second.body.submittedBy);
   assert.equal((await request(server, `${path}?status=bad`, { email: manager })).status, 400);
+});
+
+test('engineer list and detail access includes approved requests and own hackathon submissions only', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const privateRequest = await request(server, path, { email: staff, body: submission });
+  const approved = await request(server, path, { email: otherStaff, body: { ...submission, department: 'Library' } });
+  const own = await request(server, path, { email: team, body: { ...submission, source: 'hackathon', hackathonName: 'Test event' } });
+  await pool.query("UPDATE opportunities SET status = 'approved' WHERE id = $1", [approved.body.id]);
+
+  const visible = await request(server, path, { email: team });
+  assert.equal(visible.body.total, 2);
+  assert.deepEqual(new Set(visible.body.items.map(({ id }) => id)), new Set([approved.body.id, own.body.id]));
+  assert.equal((await request(server, `${path}/${privateRequest.body.id}`, { email: team })).status, 403);
+  assert.equal((await request(server, `${path}/${approved.body.id}`, { email: team })).status, 200);
+  assert.equal((await request(server, `${path}/${own.body.id}`, { email: team })).status, 200);
+  assert.equal((await request(server, `${path}?status=submitted`, { email: team })).body.total, 1);
+  assert.equal((await request(server, `${path}?status=approved&department=Library`, { email: team })).body.total, 1);
+  assert.equal((await request(server, `${path}?pageSize=1&page=2`, { email: team })).body.total, 2);
+  assert.equal((await request(server, path, { email: manager })).body.total, 3);
+  assert.equal((await request(server, `${path}/${approved.body.id}`, { email: staff })).status, 403);
 });
 
 test('managers can save and replace assessments and owners can see the persisted status', async (t) => {
@@ -511,4 +497,184 @@ test('US04 creates one project from an approved opportunity and shares delivery 
   assert.equal(deletion.body.code, 'PROJECT_EXISTS');
   assert.equal((await request(server, opportunityPath, { email: staff })).body.status, 'approved');
   assert.equal((await request(server, path, { email: manager })).body.notes.length, 3);
+});
+
+async function benefitProject(title) {
+  const { rows } = await pool.query(
+    `WITH approved AS (
+       INSERT INTO opportunities (
+         submitted_by, title, department, problem_description, proposed_improvement, status
+       )
+       SELECT id, $1, 'Estates', 'Test issue', 'Test improvement', 'approved'
+       FROM users WHERE email = $2
+       RETURNING id
+     )
+     INSERT INTO projects (opportunity_id, created_by)
+     SELECT approved.id, users.id FROM approved CROSS JOIN users WHERE users.email = $3
+     RETURNING id`,
+    [title, staff, manager]
+  );
+  return rows[0].id;
+}
+
+test('US05 managers create and edit persistent benefits linked to real projects', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const projectId = await benefitProject('First benefits project');
+  const nextProjectId = await benefitProject('Second benefits project');
+  const input = {
+    projectId, category: 'efficiency', description: 'Less administration.',
+    measurement: 'Staff hours saved', estimated: 12.5, actual: 0,
+    unit: 'Hours/month', date: '2026-11-11', notes: 'Pilot estimate.'
+  };
+  const list = (email, suffix = '') => request(server, `/api/v1/benefits${suffix}`, { email });
+  assert.deepEqual((await list(manager)).body, []);
+  assert.equal((await list()).status, 401);
+  assert.equal((await list(staff)).status, 403);
+  for (const email of [undefined, staff, team]) {
+    assert.equal((await request(server, '/api/v1/benefits', { email, body: input })).status, email ? 403 : 401);
+  }
+
+  const created = await request(server, '/api/v1/benefits', { email: manager, body: input });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.project, 'First benefits project');
+  assert.equal(created.body.actual, 0);
+  assert.equal(created.body.estimated, 12.5);
+  assert.equal(created.body.date, '2026-11-11');
+  assert.ok(Number.isFinite(Date.parse(created.body.createdAt)));
+  const path = created.headers.get('location');
+  assert.equal(path, `/api/v1/benefits/${created.body.id}`);
+  assert.deepEqual((await request(server, path, { email: manager })).body, created.body);
+  assert.deepEqual((await list(team, `?projectId=${projectId}`)).body, [created.body]);
+  assert.deepEqual((await list(manager, `?projectId=${nextProjectId}`)).body, []);
+  assert.equal((await list(manager, '?projectId=bad-id')).status, 400);
+
+  for (const email of [undefined, staff]) {
+    assert.equal((await request(server, path, { email })).status, email ? 403 : 401);
+  }
+  for (const email of [undefined, staff, team]) {
+    assert.equal((await request(server, path, { email, method: 'PUT', body: input })).status, email ? 403 : 401);
+  }
+
+  const edit = {
+    ...input, projectId: nextProjectId, category: 'financial', description: 'Updated savings.',
+    measurement: 'Annual saving', estimated: 0, actual: -25.125,
+    unit: 'GBP/year', date: '2026-11-12', notes: ''
+  };
+  const updated = await request(server, path, { email: manager, method: 'PUT', body: edit });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.id, created.body.id);
+  assert.equal(updated.body.createdAt, created.body.createdAt);
+  assert.equal(updated.body.project, 'Second benefits project');
+  assert.equal(updated.body.estimated, 0);
+  assert.equal(updated.body.actual, -25.125);
+  assert.equal(updated.body.notes, '');
+  assert.equal(updated.body.date, '2026-11-12');
+  assert.deepEqual((await request(server, path, { email: manager })).body, updated.body);
+  assert.deepEqual((await list(team, `?projectId=${projectId}`)).body, []);
+  assert.deepEqual((await list(manager, `?projectId=${nextProjectId}`)).body, [updated.body]);
+  const { rows: [stored] } = await pool.query(
+    `SELECT b.*, u.name AS author FROM project_benefits b JOIN users u ON u.id = b.updated_by WHERE b.id = $1`,
+    [created.body.id]
+  );
+  assert.equal(stored.actual, '-25.1250');
+  assert.equal(stored.author, 'Demo Manager');
+});
+
+test('US05 rejects invalid benefit fields and missing records without losing a saved benefit', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const projectId = await benefitProject('Validation project');
+  const input = {
+    projectId, category: 'service', description: 'Faster turnaround.',
+    measurement: 'Processing days saved', estimated: 2.25, actual: 1.125,
+    unit: 'Days', date: '2026-11-11'
+  };
+  const send = (body, path = '/api/v1/benefits', method = 'POST') =>
+    request(server, path, { email: manager, body, method });
+  for (const fields of [
+    { description: ' ' }, { measurement: '' }, { category: 'unknown' }, { unit: 'minutes' },
+    { estimated: '2.25' }, { actual: null }, { actual: 1e20 }, { actual: 0.00001 },
+    { date: '2026-02-30' }, { date: '11/11/2026' }, { notes: '\0' },
+    { projectId: 'not-a-uuid' }, { description: 'a'.repeat(2001) }
+  ]) {
+    const response = await send({ ...input, ...fields });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'VALIDATION_ERROR');
+    assert.ok(Object.keys(response.body.fields).length);
+  }
+  assert.equal((await send([])).status, 400);
+  assert.equal((await send({ ...input, projectId: randomUUID() })).status, 404);
+  const created = await send(input);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.notes, '');
+  const path = created.headers.get('location');
+
+  assert.equal((await send({ ...input, actual: 'invalid' }, path, 'PUT')).status, 400);
+  assert.equal((await send({ ...input, projectId: randomUUID() }, path, 'PUT')).status, 404);
+  assert.deepEqual((await request(server, path, { email: manager })).body, created.body);
+  assert.equal((await send(input, `/api/v1/benefits/${randomUUID()}`, 'PUT')).status, 404);
+  assert.equal((await request(server, '/api/v1/benefits/bad-id', { email: manager })).status, 404);
+});
+
+test('US06 manager responses support combined filters, pagination and delivery display data', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const path = '/api/v1/opportunities';
+  const records = [];
+  for (const [title, department, priority] of [
+    ['Invoice West', 'Finance', 'high'],
+    ['Archive West', 'Finance', 'low'],
+    ['Invoice East', 'Student Services', 'high'],
+    ['New submission', 'Finance', undefined]
+  ]) {
+    const created = await request(server, path, { email: staff, body: { ...submission, title, department } });
+    assert.equal(created.status, 201);
+    records.push(created.body);
+    if (priority) {
+      assert.equal((await request(server, `${path}/${created.body.id}/assessment`, {
+        email: manager, method: 'PUT',
+        body: { strategicAlignment: 4, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 5, priority }
+      })).status, 200);
+    }
+  }
+  const list = (query = '') => request(server, `${path}${query}`, { email: manager });
+  const all = await list();
+  assert.equal(all.body.total, 4);
+  for (const item of all.body.items) {
+    assert.equal(typeof item.title, 'string');
+    assert.equal(typeof item.department, 'string');
+    assert.equal(typeof item.status, 'string');
+    assert.ok(item.id);
+  }
+  assert.equal(all.body.items.find((item) => item.id === records[3].id).priority, undefined);
+  assert.equal((await list('?department=Finance')).body.total, 3);
+  assert.equal((await list('?priority=high')).body.total, 2);
+  assert.equal((await list('?status=in_assessment')).body.total, 3);
+  const combined = await list('?department=Finance&priority=high&status=in_assessment');
+  assert.equal(combined.status, 200);
+  assert.deepEqual(combined.body.items.map((item) => item.id), [records[0].id]);
+  const page2 = await list('?priority=high&pageSize=1&page=2');
+  assert.equal(page2.body.total, 2);
+  assert.equal(page2.body.items.length, 1);
+  assert.equal((await list('?department=Finance&priority=medium')).body.total, 0);
+  assert.deepEqual((await list('?department=Finance&priority=medium')).body.items, []);
+
+  assert.equal((await request(server, `${path}/${records[1].id}/decision`, {
+    email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
+  })).status, 200);
+  const project = await request(server, '/api/v1/projects', {
+    email: manager, body: { opportunityId: records[1].id }
+  });
+  assert.equal(project.status, 201);
+  assert.equal((await request(server, project.headers.get('location'), {
+    email: team, method: 'PATCH', body: { status: 'testing' }
+  })).status, 200);
+  const delivery = await list('?status=approved&department=Finance&priority=low');
+  assert.equal(delivery.body.total, 1);
+  assert.equal(delivery.body.items[0].status, 'approved');
+  assert.equal(delivery.body.items[0].deliveryStatus, 'testing');
+  assert.equal((await list('?priority=urgent')).status, 400);
+  assert.equal((await list('?department=Finance&department=Student%20Services')).status, 400);
+  assert.equal((await list()).body.total, 4);
 });

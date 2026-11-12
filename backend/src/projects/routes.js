@@ -1,4 +1,5 @@
 import express from 'express';
+import { requireRole } from '../middleware/requireRole.js';
 import { createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -30,13 +31,6 @@ function invalid(res, fields) {
   return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Check the project fields.', fields });
 }
 
-function canAccess(...roles) {
-  return (req, res, next) => {
-    if (roles.includes(req.user.role)) return next();
-    return res.status(403).json({ code: 'FORBIDDEN', message: 'You do not have permission to do that.' });
-  };
-}
-
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false;
   const date = new Date(value);
@@ -46,13 +40,13 @@ function validDate(value) {
 export function projectRoutes(pool) {
   const router = express.Router();
   const json = express.json({ limit: '64kb' });
-  const delivery = canAccess('manager', 'team');
+  const delivery = requireRole('manager', 'team');
 
   router.get('/projects', delivery, async (req, res) => {
     res.json((await listProjects(pool)).map(projectResponse));
   });
 
-  router.post('/projects', canAccess('manager'), json, async (req, res) => {
+  router.post('/projects', requireRole('manager'), json, async (req, res) => {
     if (!req.body || Array.isArray(req.body)) return invalid(res, { body: 'Send a JSON object.' });
     const { opportunityId, startDate, targetDate } = req.body;
     const fields = {};

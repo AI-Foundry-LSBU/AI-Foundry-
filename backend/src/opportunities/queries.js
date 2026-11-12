@@ -23,7 +23,7 @@ export const listSortOrders = new Map([
   ['-priority', `${priorityRank} DESC NULLS LAST, submitted_at DESC, id DESC`]
 ]);
 
-export async function findOpportunities(pool, { userId, status, category, priority, department, pageSize, offset, sort }) {
+export async function findOpportunities(pool, { userId, engineerId, status, category, priority, department, pageSize, offset, sort }) {
   // The ORDER BY fragment comes from the fixed map above. User values are parameters.
   const orderBy = listSortOrders.get(sort);
   const { rows } = await pool.query(
@@ -38,6 +38,7 @@ export async function findOpportunities(pool, { userId, status, category, priori
          AND ($3::text IS NULL OR o.category = $3)
          AND ($4::text IS NULL OR o.priority = $4)
          AND ($5::text IS NULL OR o.department = $5)
+         AND ($8::uuid IS NULL OR o.status = 'approved' OR o.submitted_by = $8)
      )
      SELECT counts.total, items.*
      FROM (SELECT count(*) AS total FROM matching) AS counts
@@ -45,7 +46,7 @@ export async function findOpportunities(pool, { userId, status, category, priori
        SELECT * FROM matching ORDER BY ${orderBy} LIMIT $6 OFFSET $7
      ) AS items ON true
      ORDER BY ${orderBy}`,
-    [userId, status, category, priority, department, pageSize, offset]
+    [userId, status, category, priority, department, pageSize, offset, engineerId]
   );
 
   // The count survives even when a page has no items.
