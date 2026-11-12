@@ -23,7 +23,7 @@ It covers the endpoints, request and response formats, and user roles. Any chang
 http://localhost:3000/api/v1
 ```
 
-For Sprint 1, the `X-User-Email` header is used to identify demo users. This is only for testing and will need to be replaced with proper authentication later.
+Coursework accounts sign in with email and an application password. PostgreSQL stores sessions and password hashes. The old `X-User-Email` header no longer authenticates requests. See [backend setup](backend/README.md) for generating local passwords and upgrading the database.
 
 ## GitHub Guidelines
 
@@ -37,4 +37,4 @@ For Sprint 1, the `X-User-Email` header is used to identify demo users. This is 
 
 The setup steps are in [`backend/README.md`](backend/README.md). That guide creates the local database, starts the API, and runs the website.
 
-Sign in with `staff@example.com` to submit, track or delete your own requests. Sign in with `manager@example.com` to assess requests, record decisions and move approved opportunities to Project Delivery. Sign in with `team@example.com` to update delivery status and add progress notes.
+Sign in with `staff@lsbu.ac.uk` to submit, track or delete your own requests. Sign in with `manager@lsbu.ac.uk` to assess requests, record decisions and move approved opportunities to Project Delivery. Sign in with `engineer@lsbu.ac.uk` to update delivery status and add progress notes.

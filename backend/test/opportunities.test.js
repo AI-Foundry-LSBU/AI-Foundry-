@@ -2,16 +2,15 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { after, before, beforeEach, test } from 'node:test';
-import express from 'express';
 import pg from 'pg';
-import { createApp } from '../src/app.js';
-import { migrate, seed } from '../src/db/setup.js';
-import { resolveDemoUser } from '../src/middleware/resolveDemoUser.js';
+import { createApp as buildApp } from '../src/app.js';
+import { migrate, seed as seedUsers } from '../src/db/setup.js';
+import { authenticatedRequest as request, sessionSecret, testPasswords } from '../test-support/client.js';
 
-const staff = 'staff@example.com';
-const otherStaff = 'staff2@example.com';
-const manager = 'manager@example.com';
-const team = 'team@example.com';
+const staff = 'staff@lsbu.ac.uk';
+const otherStaff = 'staff2@lsbu.ac.uk';
+const manager = 'manager@lsbu.ac.uk';
+const team = 'engineer@lsbu.ac.uk';
 const submission = {
   title: 'Automate booking emails',
   department: 'Estates & Facilities',
@@ -19,6 +18,8 @@ const submission = {
   proposedImprovement: 'Send confirmations when a booking is approved.'
 };
 const schema = `foundry_test_${randomUUID().replaceAll('-', '')}`;
+const createApp = (pool) => buildApp(pool, { sessionSecret, sessionSchema: schema, pruneSessionInterval: false });
+const seed = (pool) => seedUsers(pool, testPasswords);
 let admin;
 let schemaCreated = false;
 let pool;
@@ -57,44 +58,6 @@ async function listen(app) {
   await once(server, 'listening');
   return server;
 }
-
-async function request(server, path, { email, body, rawBody, method, contentType = 'application/json' } = {}) {
-  const headers = {};
-  if (email !== undefined) headers['X-User-Email'] = email;
-  if (body !== undefined || rawBody !== undefined) headers['Content-Type'] = contentType;
-
-  const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-    method: method ?? (body !== undefined || rawBody !== undefined ? 'POST' : 'GET'),
-    headers,
-    body: rawBody ?? (body === undefined ? undefined : JSON.stringify(body))
-  });
-  const text = await response.text();
-  return {
-    status: response.status,
-    body: text ? JSON.parse(text) : null,
-    headers: response.headers
-  };
-}
-
-test('demo identity rejects missing, unknown and combined emails and resolves seeded roles', async (t) => {
-  const app = express();
-  app.get('/identity', resolveDemoUser(pool), (req, res) => res.json(req.user));
-  const server = await listen(app);
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-
-  for (const email of [undefined, '', 'unknown@example.com', `${staff},${manager}`]) {
-    const result = await request(server, '/identity', { email });
-    assert.equal(result.status, 401);
-    assert.equal(result.body.code, 'UNAUTHORISED');
-  }
-
-  for (const [email, role] of [[staff.toUpperCase(), 'staff'], [otherStaff, 'staff'], [manager, 'manager'], [team, 'team']]) {
-    const result = await request(server, '/identity', { email });
-    assert.equal(result.status, 200);
-    assert.equal(result.body.role, role);
-    assert.ok(result.body.id);
-  }
-});
 
 test('POST saves the submission with server-owned metadata and preserves expected benefits', async (t) => {
   const server = await listen(createApp(pool));
@@ -317,7 +280,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql'
   ]);
 });
 

@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createPool } from './pool.js';
+import { demoAccounts, hashPassword, verifyPassword } from '../auth/passwords.js';
 
 const migrationsDirectory = new URL('../../db/migrations/', import.meta.url);
 const seedFile = new URL('../../db/seeds/demo_users.sql', import.meta.url);
@@ -39,8 +40,33 @@ export async function migrate(pool) {
   }
 }
 
-export async function seed(pool) {
-  await pool.query(await readFile(seedFile, 'utf8'));
+export async function seed(pool, environment = process.env) {
+  for (const [, key] of demoAccounts) {
+    const value = environment[key];
+    if (typeof value !== 'string' || value.length < 12 || value.length > 128) {
+      throw new Error(`Set ${key} to 12–128 characters. Run npm run auth:configure first.`);
+    }
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(308241974)');
+    await client.query(await readFile(seedFile, 'utf8'));
+    for (const [email, key] of demoAccounts) {
+      const { rows: [user] } = await client.query('SELECT password_hash FROM users WHERE email = $1', [email]);
+      if (user.password_hash && await verifyPassword(user.password_hash, environment[key])) continue;
+      await client.query(
+        'UPDATE users SET password_hash = $2, auth_version = auth_version + 1 WHERE email = $1',
+        [email, await hashPassword(environment[key])]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
