@@ -1527,6 +1527,10 @@ td { padding: 14px; font-size: 14px; }
 .login-story { grid-column: 1; grid-row: 1; min-height: 100vh; padding: 96px clamp(44px, 7vw, 104px) 48px; justify-content: center; background: #fff; border: 0; border-radius: 0; box-shadow: none; }
 .login-panel { grid-column: 2; grid-row: 1; align-self: stretch; min-height: 100vh; padding: 96px clamp(38px, 5vw, 72px) 48px; justify-content: center; background: #f5f2ff; border: 0; border-left: 1px solid #e1ddef; border-radius: 0; box-shadow: none; }
 .login-panel form { width: min(100%, 420px); margin-inline: auto; }
+.forgot-password { align-self: flex-end; margin-top: -8px; padding: 0; border: 0; background: none; color: #4169d5; font: 600 13px/1.4 inherit; cursor: pointer; }
+.forgot-password:hover { text-decoration: underline; }
+.password-reminder { margin: 0; padding: 14px 16px; background: #fff; border: 1px solid #e3e1ef; border-radius: 12px; color: #4b4768; font-size: 14px; line-height: 1.5; }
+.password-reminder strong { color: #23243a; }
 .login-panel .button { width: 100%; }
 .login-panel .button > span { justify-content: center; white-space: nowrap; }
 

@@ -11,6 +11,13 @@ import {
   Field
 } from "../components/ui";
 
+const passwordKeys = {
+  "staff@lsbu.ac.uk": "DEMO_STAFF_PASSWORD",
+  "staff2@lsbu.ac.uk": "DEMO_STAFF2_PASSWORD",
+  "manager@lsbu.ac.uk": "DEMO_MANAGER_PASSWORD",
+  "engineer@lsbu.ac.uk": "DEMO_ENGINEER_PASSWORD"
+};
+
 export function SignInPage() {
   const { isAuthenticated, currentUser, signIn } = useApp();
   const navigate = useNavigate();
@@ -18,6 +25,8 @@ export function SignInPage() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const passwordKey = passwordKeys[email.trim().toLowerCase()];
   if (isAuthenticated) return <Navigate to={currentUser.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities"} replace />;
   const submit = async (event) => {
     event.preventDefault();
@@ -87,11 +96,42 @@ export function SignInPage() {
               <LockKeyhole size={22} />
             </div>
           </div>
-          <h2>Sign in to AI Foundry</h2>
+          <h2>{showForgotPassword ? "Forgot password" : "Sign in to AI Foundry"}</h2>
           <p>
-            Use a coursework demo account to sign in.
+            {showForgotPassword
+              ? "Demo accounts do not use email. The password is saved on this computer."
+              : "Use a coursework demo account to sign in."}
           </p>
-          <form onSubmit={submit}>
+          {showForgotPassword ? <form onSubmit={(event) => event.preventDefault()}>
+            <Field
+              label="Email"
+              required
+              helper="Use the same demo email you sign in with."
+            >
+              <div className="input-with-icon">
+                <Mail size={16} />
+                <input
+                  type="email"
+                  name="email"
+                  aria-label="Email"
+                  autoComplete="username"
+                  required
+                  maxLength={254}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="staff@lsbu.ac.uk"
+                />
+              </div>
+            </Field>
+            <p className="password-reminder" role="status">
+              {passwordKey
+                ? <>The password for <strong>{email.trim().toLowerCase()}</strong> is the value of <strong>{passwordKey}</strong> in <strong>backend/.env</strong>.</>
+                : "That email is not one of the demo accounts. Use staff@lsbu.ac.uk, staff2@lsbu.ac.uk, manager@lsbu.ac.uk, or engineer@lsbu.ac.uk."}
+            </p>
+            <Button type="button" variant="secondary" onClick={() => setShowForgotPassword(false)}>
+              Back to sign in
+            </Button>
+          </form> : <form onSubmit={submit}>
             <Field
     label="Email"
     required
@@ -123,9 +163,12 @@ export function SignInPage() {
                   onChange={(event) => { setPassword(event.target.value); setError(''); }} />
               </div>
             </Field>
+            <button type="button" className="forgot-password" onClick={() => setShowForgotPassword(true)}>
+              Forgot password?
+            </button>
             {error && <p role="alert" className="error-text">{error}</p>}
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Signing in…' : 'Sign In'}</Button>
-          </form>
+          </form>}
         </section>
       </main>
     </div>;

@@ -90,6 +90,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const [decisionReason, setDecisionReason] = useState(
     opportunity?.decisionReason ?? ""
   );
+  const [reasonError, setReasonError] = useState("");
   const [message, setMessage] = useState("");
   const [pendingDecision, setPendingDecision] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -161,6 +162,11 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     }
   };
   const openDecision = (decision) => {
+    if (decision === "Rejected" && !decisionReason.trim()) {
+      setReasonError("Please write a reason.");
+      return;
+    }
+    setReasonError("");
     setSaveError("");
     setPendingDecision(decision);
   };
@@ -454,13 +460,18 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             {canDecide && <Field
     label="Decision reason"
     helper={isLive ? "Required for rejection. Staff can read the saved reason." : "Record the rationale or feedback that staff should see."}
+    error={reasonError}
   >
               <textarea
     rows={4}
     value={decisionReason}
     maxLength={2000}
     disabled={saving}
-    onChange={(event) => setDecisionReason(event.target.value)}
+    aria-invalid={Boolean(reasonError)}
+    onChange={(event) => {
+      setDecisionReason(event.target.value);
+      if (event.target.value.trim()) setReasonError("");
+    }}
     placeholder="Explain the decision, key considerations and any next steps..."
   />
             </Field>}
@@ -482,7 +493,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               <Button
     variant="danger"
     onClick={() => openDecision("Rejected")}
-    disabled={saving || Boolean(project) || !decisionReason.trim()}
+    disabled={saving || Boolean(project)}
   >
                 Reject
               </Button>
