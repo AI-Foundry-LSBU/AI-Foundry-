@@ -13,6 +13,7 @@ import {
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
+import { useBenefits } from "../data/useBenefits";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { useOpportunities } from "../data/useOpportunities";
 import {
@@ -31,30 +32,43 @@ function hoursSaved(records) {
 function annualSavings(records) {
   return records.filter((item) => item.unit === "GBP/year").reduce((sum, item) => sum + item.actual, 0);
 }
+const portfolioStatuses = [
+  "Submitted",
+  "Under Review",
+  "Approved",
+  "Rejected",
+  "In Progress",
+  "Testing",
+  "Completed"
+];
+
+function useRecordedBenefits() {
+  const recorded = useBenefits();
+  const records = recorded.data ?? [];
+  return {
+    ...recorded,
+    hours: recorded.loading || recorded.error ? null : hoursSaved(records),
+    savings: recorded.loading || recorded.error ? null : annualSavings(records)
+  };
+}
 
 function ManagerDashboard() {
-  const { currentUser, opportunities: samples, benefits } = useApp();
+  const { currentUser, opportunities: samples } = useApp();
   const navigate = useNavigate();
   const liveManager = currentUser.role === "Digital Project Manager";
   const live = useOpportunities(liveManager ? currentUser.email : null, "all");
   const delivery = useDeliveryProjects();
+  const recorded = useRecordedBenefits();
   if (live.loading) return <div role="status"><EmptyState title="Loading opportunities…" /></div>;
   if (live.error) return <div role="alert">
       <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
     </div>;
   const opportunities = liveManager ? live.data : samples;
-  const statusCounts = [
-    "Submitted",
-    "Under Review",
-    "Approved",
-    "Rejected"
-  ].map((status) => ({
+  const statusCounts = portfolioStatuses.map((status) => ({
     status,
-    value: opportunities.filter((item) => item.status === status).length
+    value: opportunities.filter((item) => getOpportunityDisplayStatus(item) === status).length
   }));
   const max = Math.max(...statusCounts.map((item) => item.value), 1);
-  const hours = hoursSaved(benefits);
-  const savings = annualSavings(benefits);
   const submitted = opportunities.filter((item) => item.status === "Submitted").length;
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
   const projects = delivery.data ?? [];
@@ -214,20 +228,26 @@ function ManagerDashboard() {
               <p>Validated and forecast impact</p>
             </div>
           </div>
-          <div className="benefit-highlight">
-            <Clock3 size={20} />
-            <div>
-              <strong>{hours} hours/month</strong>
-              <span>actual time saved</span>
+          {recorded.loading && <p role="status">Loading benefits…</p>}
+          {recorded.error && <div role="alert">
+            <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
+          </div>}
+          {!recorded.loading && !recorded.error && <>
+            <div className="benefit-highlight">
+              <Clock3 size={20} />
+              <div>
+                <strong>{recorded.hours} hours/month</strong>
+                <span>actual time saved</span>
+              </div>
             </div>
-          </div>
-          <div className="benefit-highlight">
-            <CircleDollarSign size={20} />
-            <div>
-              <strong>{formatCurrency(savings)}/year</strong>
-              <span>actual financial savings</span>
+            <div className="benefit-highlight">
+              <CircleDollarSign size={20} />
+              <div>
+                <strong>{formatCurrency(recorded.savings)}/year</strong>
+                <span>actual financial savings</span>
+              </div>
             </div>
-          </div>
+          </>}
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
             View benefits
           </Button>
@@ -237,17 +257,15 @@ function ManagerDashboard() {
 }
 
 function EngineerDashboard() {
-  const { benefits } = useApp();
   const navigate = useNavigate();
   const delivery = useDeliveryProjects();
+  const recorded = useRecordedBenefits();
   if (delivery.loading) return <div role="status"><EmptyState title="Loading projects…" /></div>;
   if (delivery.error) return <div role="alert">
     <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
   </div>;
   const projects = delivery.data;
   const countStatus = (status) => projects.filter((item) => item.status === status).length;
-  const hours = hoursSaved(benefits);
-  const savings = annualSavings(benefits);
   return <>
       <PageHeader
     title="Delivery Dashboard"
@@ -339,20 +357,26 @@ function EngineerDashboard() {
               <p>Measures linked to project delivery</p>
             </div>
           </div>
-          <div className="benefit-highlight">
-            <Clock3 size={20} />
-            <div>
-              <strong>{hours} hours/month</strong>
-              <span>actual time saved</span>
+          {recorded.loading && <p role="status">Loading benefits…</p>}
+          {recorded.error && <div role="alert">
+            <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
+          </div>}
+          {!recorded.loading && !recorded.error && <>
+            <div className="benefit-highlight">
+              <Clock3 size={20} />
+              <div>
+                <strong>{recorded.hours} hours/month</strong>
+                <span>actual time saved</span>
+              </div>
             </div>
-          </div>
-          <div className="benefit-highlight">
-            <BarChart3 size={20} />
-            <div>
-              <strong>{formatCurrency(savings)}/year</strong>
-              <span>actual financial savings</span>
+            <div className="benefit-highlight">
+              <BarChart3 size={20} />
+              <div>
+                <strong>{formatCurrency(recorded.savings)}/year</strong>
+                <span>actual financial savings</span>
+              </div>
             </div>
-          </div>
+          </>}
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
             View benefits
           </Button>

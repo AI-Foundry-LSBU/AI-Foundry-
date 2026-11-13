@@ -7,6 +7,7 @@ import { useApp } from "../context/AppContext";
 import { deliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
 import { useBenefits } from "../data/useBenefits";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
+import { useOpportunities } from "../data/useOpportunities";
 import { projectStatuses } from "../data/options";
 import {
   Button,
@@ -80,9 +81,8 @@ function ProjectDetail({ initialProject, isLive }) {
       setSaving(false);
     }
   };
-  const opportunity = opportunities.find(
-    (item) => item.id === project.opportunityId
-  );
+  const linked = useOpportunities(isLive ? currentUser.email : null, "all", project.opportunityId);
+  const opportunity = isLive ? linked.data : opportunities.find((item) => item.id === project.opportunityId);
   const projectBenefits = benefits.data ?? [];
   const addNote = () => {
     if (!note.trim()) return;
@@ -145,6 +145,12 @@ function ProjectDetail({ initialProject, isLive }) {
               </p>
             </div>
           </Card>
+          {isLive && linked.loading && <Card><p role="status">Loading the original opportunity…</p></Card>}
+          {isLive && linked.error && <Card>
+            <div role="alert">
+              <EmptyState title="Could not load the original opportunity" text={linked.error.message} action={<Button onClick={linked.retry}>Try again</Button>} />
+            </div>
+          </Card>}
           {opportunity && <Card>
               <div className="card-header">
                 <div>
