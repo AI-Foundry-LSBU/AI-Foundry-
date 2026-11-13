@@ -219,7 +219,7 @@ function ProjectDetail({ initialProject, isLive }) {
                 <p>Latest delivery updates first</p>
               </div>
             </div>
-            {project.activity.length === 0 && <p>No updates recorded yet.</p>}
+            {project.activity.length === 0 && <p className="activity-empty">No updates recorded yet.</p>}
             <div className="activity-list">
               {project.activity.map((item, index) => <div className="activity-item" key={item.id ?? `${item.date}-${index}`}>
                   <div className="activity-dot" />

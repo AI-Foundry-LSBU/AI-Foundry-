@@ -289,6 +289,7 @@ td strong { color: var(--ink); font-weight: 600; }
 .avatar.tiny { width: 23px; height: 23px; margin-left: auto; font-size: 7px; }
 .project-card select { height: 34px; padding: 0 11px; color: var(--muted); background: #fafbfc; border-width: 1px 0 0; border-radius: 0; font-size: 9px; }
 .activity-list { padding: 6px 20px 16px; }
+.activity-empty { margin: 0; padding: 16px 18px 18px; color: var(--subtle); }
 .activity-item { position: relative; padding: 14px 0 14px 25px; display: flex; gap: 11px; border-bottom: 1px solid #eef1f5; }
 .activity-item:last-child { border-bottom: 0; }
 .activity-item::before { content: ''; position: absolute; top: 28px; bottom: -14px; left: 5px; width: 1px; background: var(--line); }
