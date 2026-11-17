@@ -173,7 +173,7 @@ function ManagerDashboard() {
                 <div>
                   <i
     style={{
-      width: `${Math.max(item.value / max * 100, 8)}%`
+      width: `${item.value ? Math.max(item.value / max * 100, 8) : 0}%`
     }}
   />
                 </div>

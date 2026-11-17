@@ -42,6 +42,8 @@ function opportunityResponse(row, submitterName) {
     expectedBenefits: row.expected_benefits ?? undefined,
     status: row.status,
     deliveryStatus: row.delivery_status ?? undefined,
+    priority: row.priority ?? undefined,
+    category: row.category ?? undefined,
     source: row.source,
     hackathonName: row.hackathon_name ?? undefined,
     submittedBy: { id: row.submitted_by, name: submitterName },

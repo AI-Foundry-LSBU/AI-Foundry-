@@ -969,6 +969,10 @@ components:
           allOf:
             - $ref: '#/components/schemas/ProjectStatus'
           description: Current status of the linked project, when present in a read response.
+        priority:
+          $ref: '#/components/schemas/Priority'
+        category:
+          $ref: '#/components/schemas/Category'
         source:
           $ref: '#/components/schemas/Source'
         hackathonName:
