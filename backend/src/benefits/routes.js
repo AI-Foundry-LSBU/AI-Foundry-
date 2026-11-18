@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
-import { findBenefit, insertBenefit, listBenefits, replaceBenefit } from './queries.js';
+import { benefitSummaryRecords, findBenefit, insertBenefit, listBenefits, replaceBenefit } from './queries.js';
+import { aggregateBenefits } from './summary.js';
 import { uuidPattern, validateBenefit } from './validation.js';
 
 function benefitResponse(row) {
@@ -38,6 +39,12 @@ export function benefitRoutes(pool) {
   const read = requireRole('manager', 'team');
   const write = requireRole('manager');
   const json = express.json({ limit: '64kb' });
+
+  // Register before /benefits/:id so "summary" is not treated as a benefit ID.
+  router.get('/benefits/summary', requireRole('manager'), async (req, res) => {
+    const result = await benefitSummaryRecords(pool);
+    return res.json(aggregateBenefits(result.benefits, result.completed_projects));
+  });
 
   router.get('/benefits', read, async (req, res) => {
     const { projectId } = req.query;

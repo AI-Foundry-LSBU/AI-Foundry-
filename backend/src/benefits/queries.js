@@ -5,6 +5,22 @@ const benefitSelect = `
   JOIN opportunities o ON o.id = p.opportunity_id
 `;
 
+export async function benefitSummaryRecords(pool) {
+  // One SQL statement gives counts and records the same database snapshot.
+  // Only one-to-one joins: progress notes cannot multiply benefit records.
+  const { rows: [result] } = await pool.query(`
+    SELECT
+      (SELECT count(*)::integer FROM projects WHERE status = 'completed') AS completed_projects,
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(saved) || jsonb_build_object(
+          'estimated', saved.estimated::text, 'actual', saved.actual::text
+        ) ORDER BY saved.id)
+        FROM (${benefitSelect}) saved
+      ), '[]'::jsonb) AS benefits
+  `);
+  return result;
+}
+
 export async function listBenefits(pool, projectId) {
   const { rows } = await pool.query(
     `${benefitSelect}
