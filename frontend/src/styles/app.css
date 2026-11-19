@@ -2191,3 +2191,125 @@ button.project-progress {
   gap: 10px;
   flex: 0 0 auto;
 }
+
+.notice-menu { position: relative; }
+
+.notice-button {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  color: #64708f;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.notice-button[aria-expanded="true"] {
+  color: #23243a;
+  background: #f6f5fb;
+}
+
+.notice-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #c44f88;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.notice-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(340px, calc(100vw - 24px));
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e0e1ed;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(35, 36, 58, 0.12);
+}
+
+.notice-panel header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 10px;
+}
+
+.notice-panel header strong { font-size: 14px; }
+
+.notice-panel header span {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.notice-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.notice-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  background: #f8f8fc;
+  border-radius: 10px;
+}
+
+.notice-item a {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.notice-item a:hover { text-decoration: underline; }
+
+.notice-item button {
+  justify-self: start;
+  padding: 0;
+  color: var(--subtle);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notice-empty {
+  margin: 0;
+  padding: 6px 10px 12px;
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .notice-panel {
+    position: fixed;
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

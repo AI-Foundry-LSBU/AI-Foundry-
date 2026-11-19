@@ -317,6 +317,11 @@ and name, optional decision reason, event date and source. A timeline index
 supports retrieval in chronological order. Existing records are preserved and
 the migration runner applies the file only once.
 
+History and notifications have separate migration files with a `007` prefix.
+The runner tracks their complete filenames, so both are applied safely. Keep
+`007_opportunity_history.sql` at its original name to preserve databases that
+already applied US08 before the notification update.
+
 The API automatically records:
 
 - A submission, attributed to the staff member or hackathon submitter.

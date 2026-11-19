@@ -116,7 +116,7 @@ export async function saveAssessment(pool, id, managerId, data) {
            status = CASE WHEN o.status = 'submitted' THEN 'in_assessment' ELSE o.status END,
            updated_at = CURRENT_TIMESTAMP
        FROM previous WHERE o.id = previous.id
-       RETURNING o.*
+       RETURNING o.*, previous.status AS previous_status
      ), saved AS (
        INSERT INTO opportunity_assessments (
          opportunity_id, assessed_by, strategic_alignment, benefit_potential,

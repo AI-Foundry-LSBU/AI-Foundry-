@@ -1,3 +1,4 @@
+import { notifySubmitter } from '../notifications/queries.js';
 import { deleteOpportunity, findOpportunities, findOpportunity, findOpportunityHistory, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
 import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
 import { canReadOpportunity } from '../auth/permissions.js';
@@ -149,6 +150,9 @@ export function assessOpportunity(pool) {
     if (!row) {
       return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
     }
+    if (row.previous_status === 'submitted' && row.status === 'in_assessment') {
+      await notifySubmitter(pool, { opportunityId: row.id, actorId: req.user.id, kind: 'under_review' });
+    }
     return res.json(opportunityResponse(row, row.submitter_name));
   };
 }
@@ -186,7 +190,10 @@ export function decideOpportunity(pool) {
 
     const { id } = req.params;
     const row = uuidPattern.test(id) ? await saveDecision(pool, id, req.user.id, data) : undefined;
-    if (row) return res.json(opportunityResponse(row, row.submitter_name));
+    if (row) {
+      await notifySubmitter(pool, { opportunityId: row.id, actorId: req.user.id, kind: data.decision });
+      return res.json(opportunityResponse(row, row.submitter_name));
+    }
 
     if (!uuidPattern.test(id) || !await findOpportunity(pool, id)) {
       return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });

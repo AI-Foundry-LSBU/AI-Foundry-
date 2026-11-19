@@ -96,3 +96,39 @@ test('US08 history follows the existing opportunity deletion policy', async () =
   assert.equal((await pool.query('SELECT count(*)::integer AS count FROM opportunity_history WHERE opportunity_id = $1', [submittedId])).rows[0].count, 0);
   assert.equal((await pool.query('SELECT count(*)::integer AS count FROM opportunity_history WHERE opportunity_id = $1', [rejectedId])).rows[0].count, 2);
 });
+
+test('adding notification migrations preserves a database that already applied US08 history', async () => {
+  const legacySchema = `history_upgrade_${randomUUID().replaceAll('-', '')}`;
+  await admin.query(`CREATE SCHEMA ${legacySchema}`);
+  const legacy = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 1,
+    onConnect: (client) => client.query(`SET search_path TO ${legacySchema}`) });
+  try {
+    await legacy.query('CREATE TABLE schema_migrations (filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+    for (const file of ['001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql']) {
+      await legacy.query(await readFile(new URL(`../db/migrations/${file}`, import.meta.url), 'utf8'));
+      await legacy.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+    }
+    await seed(legacy, testPasswords);
+    await legacy.query(`INSERT INTO opportunities
+      (submitted_by, title, department, problem_description, proposed_improvement)
+      SELECT id, 'Keep this saved history', 'Estates', 'Issue', 'Improvement'
+      FROM users WHERE email = 'staff@lsbu.ac.uk'`);
+    await legacy.query(await readFile(new URL('../db/migrations/007_opportunity_history.sql', import.meta.url), 'utf8'));
+    await legacy.query("INSERT INTO schema_migrations (filename) VALUES ('007_opportunity_history.sql')");
+    const before = (await legacy.query('SELECT * FROM opportunity_history ORDER BY id')).rows;
+    assert.equal(before.length, 1);
+    await migrate(legacy);
+    await migrate(legacy);
+    assert.deepEqual((await legacy.query('SELECT * FROM opportunity_history ORDER BY id')).rows, before);
+    const files = (await legacy.query("SELECT filename FROM schema_migrations WHERE filename LIKE '007%' OR filename LIKE '008%' ORDER BY filename")).rows;
+    assert.deepEqual(files.map((row) => row.filename), [
+      '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql'
+    ]);
+    await legacy.query(`INSERT INTO notifications (user_id, opportunity_id, kind, message)
+      SELECT submitted_by, id, 'under_review', 'Review started.' FROM opportunities`);
+    assert.equal((await legacy.query('SELECT count(*)::integer AS count FROM notifications')).rows[0].count, 1);
+  } finally {
+    await legacy.end();
+    await admin.query(`DROP SCHEMA ${legacySchema} CASCADE`);
+  }
+});
