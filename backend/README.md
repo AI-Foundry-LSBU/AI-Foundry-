@@ -301,6 +301,108 @@ comparisons and the empty-state message using this response. Loading or
 refreshing the dashboard, and refetching after benefit edits, should request a
 fresh summary.
 
+## Opportunity history (US08 backend)
+
+After applying the three US08 commits, stop the backend and run this from
+`backend/`, then start it again:
+
+```bash
+npm run db:migrate
+npm start
+```
+
+Migration `007_opportunity_history.sql` adds `opportunity_history`. Each entry
+stores the opportunity ID, event type, previous/new status, responsible user ID
+and name, optional decision reason, event date and source. A timeline index
+supports retrieval in chronological order. Existing records are preserved and
+the migration runner applies the file only once.
+
+The API automatically records:
+
+- A submission, attributed to the staff member or hackathon submitter.
+- A change from Submitted to Under Review when the first assessment is saved.
+- An approval or rejection, including its saved reason and manager.
+- Moving an approved opportunity to delivery, attributed to the manager.
+- Changes to the linked project's delivery status, attributed to its updater.
+
+Opportunity approval and project delivery are separate lifecycles. Delivery
+events belong to the opportunity's history but do not change its approval
+status. Repeated saves of the same status, progress/note-only updates and edits
+to assessment scores without a status change do not create status events. This
+is a status/decision history, not a full audit of every editable field.
+
+The write queries use SQL common table expressions: named steps within one
+statement. They lock the previous state, save the update and insert history
+together. If history cannot be written, the entire statement rolls back,
+including the decision or associated progress note. Concurrent decisions cannot
+overwrite the accepted decision or add a second decision event. The actor comes
+from the authenticated account; clients cannot set the history user or date.
+
+### Reading the timeline
+
+`GET /api/v1/opportunities/:id/history` requires a signed-in manager. It returns
+401 without a session, 403 for staff/engineers and 404 for a missing or malformed
+opportunity ID. The response is:
+
+```json
+{
+  "opportunityId": "7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e",
+  "items": [
+    {
+      "id": "21",
+      "eventType": "decision_recorded",
+      "statusType": "opportunity",
+      "fromStatus": "in_assessment",
+      "toStatus": "rejected",
+      "actor": { "id": "6bfcbbab-9947-417e-9b04-d76efa7cb9b9", "name": "Demo Manager" },
+      "reason": "Already covered by another project.",
+      "occurredAt": "2026-11-19T10:15:00.000Z",
+      "source": "live"
+    }
+  ]
+}
+```
+
+Entries are returned oldest first, ordered by event timestamp and then the
+increasing history ID to resolve ties. IDs are strings to preserve bigint
+precision. `statusType` is `opportunity` or `delivery`. A null `fromStatus` means
+creation or an unknown previous state on a recovered decision; null `reason`
+means no reason was recorded for an approval, or the event is not a decision.
+An existing imported opportunity can have an empty `items` array.
+
+There are no API routes for creating, editing or deleting history entries. A
+database trigger also rejects direct row edits/deletions. The existing staff
+deletion rule is preserved: deleting an opportunity without a delivery project
+also deletes its history. This is not an archival record of deleted requests or
+a tamper-proof audit log against database administrators.
+
+### Existing data and frontend handoff
+
+The migration recovers stored submissions and the latest saved decision, using
+their existing user IDs, timestamps and reasons. They have `source: backfill`;
+their user-name snapshot uses the name available at migration time. Earlier
+assessment and delivery transitions were not stored, so they cannot be
+reconstructed. The migration does not invent dates, transitions or actors. New
+API events have `source: live`; later account-name changes do not rewrite them.
+Direct administrative SQL imports/updates are outside the recording workflow.
+
+The frontend should request this endpoint when a manager opens an opportunity,
+then display each event, actor name, date and decision reason in the supplied
+order. Use readable status labels, distinguish delivery events, and show a
+message if `items` is empty. Display recovered events as earlier recorded data
+without implying the timeline is complete. Refresh the history after a decision
+or status change. No history editing controls should be provided. These commits
+implement the three backend tasks; they do not add a frontend timeline.
+
+### Verification
+
+The US08 tests cover upgrading existing data, repeat migrations, database
+read-only protection, deletion policy, automatic recording, actor snapshots,
+rollback, concurrent requests, endpoint permissions, chronological ordering and
+unsupported history-write requests. Run `npm test` with a local
+`TEST_DATABASE_URL` as described above. Tests use isolated schemas and cascade
+their own cleanup into the history table; application data is not reset.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.

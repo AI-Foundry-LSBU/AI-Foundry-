@@ -91,6 +91,20 @@ export async function findOpportunity(pool, id) {
   return rows[0];
 }
 
+export async function findOpportunityHistory(pool, id) {
+  // One snapshot distinguishes a missing opportunity from an empty timeline.
+  const { rows } = await pool.query(
+    `SELECT o.id AS requested_opportunity_id, h.*
+     FROM opportunities o
+     LEFT JOIN opportunity_history h ON h.opportunity_id = o.id
+     WHERE o.id = $1
+     ORDER BY h.occurred_at ASC, h.id ASC`,
+    [id]
+  );
+  if (!rows.length) return undefined;
+  return { opportunityId: rows[0].requested_opportunity_id, rows: rows.filter((row) => row.id !== null) };
+}
+
 export async function saveAssessment(pool, id, managerId, data) {
   // Lock the old status, then save the assessment and any transition together.
   const { rows } = await pool.query(
