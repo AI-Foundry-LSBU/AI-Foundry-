@@ -18,6 +18,7 @@ import {
   useNavigate
 } from "react-router-dom";
 import { useState } from "react";
+import { AccountNotices } from "../components/AccountNotices";
 import { useApp } from "../context/AppContext";
 const staffNav = [
   { to: "/opportunities", label: "My Opportunities", icon: ClipboardList },
@@ -116,6 +117,7 @@ function Layout() {
             <strong>{currentTitle}</strong>
           </div>
           <div className="header-tools">
+            <AccountNotices />
             <div className="user-info">
               <div className="avatar">{user.initials}</div>
               <div>

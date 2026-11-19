@@ -84,13 +84,16 @@ export async function findOpportunity(pool, id) {
 export async function saveAssessment(pool, id, managerId, data) {
   // Update the opportunity and replace its assessment together in one statement.
   const { rows } = await pool.query(
-    `WITH updated AS (
-       UPDATE opportunities
+    `WITH existing AS (
+       SELECT id, status AS previous_status FROM opportunities WHERE id = $1
+     ), updated AS (
+       UPDATE opportunities AS o
        SET priority = $3, category = $4,
-           status = CASE WHEN status = 'submitted' THEN 'in_assessment' ELSE status END,
+           status = CASE WHEN o.status = 'submitted' THEN 'in_assessment' ELSE o.status END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-       RETURNING *
+       FROM existing
+       WHERE o.id = existing.id
+       RETURNING o.*, existing.previous_status
      ), saved AS (
        INSERT INTO opportunity_assessments (
          opportunity_id, assessed_by, strategic_alignment, benefit_potential,

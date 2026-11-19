@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Filter,
-  Plus,
   Search
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -97,9 +96,6 @@ export function OpportunitiesPage() {
               </div>
             </>}
         </div>
-        {isStaff && <Button icon={Plus} onClick={() => navigate("/submit")}>
-            Submit Opportunity
-          </Button>}
       </section>
 
       <section className="opportunity-query">

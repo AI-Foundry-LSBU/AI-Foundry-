@@ -42,7 +42,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits, notifications'));
 
 after(async () => {
   try {
@@ -281,7 +281,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '008_notification_statuses.sql'
   ]);
 });
 
@@ -677,4 +677,46 @@ test('US06 manager responses support combined filters, pagination and delivery d
   assert.equal((await list('?priority=urgent')).status, 400);
   assert.equal((await list('?department=Finance&department=Student%20Services')).status, 400);
   assert.equal((await list()).body.total, 4);
+});
+
+test('the submitter is notified when a manager or engineer changes the status', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const created = await request(server, '/api/v1/opportunities', { email: staff, body: submission });
+  const id = created.body.id;
+  const ratings = { strategicAlignment: 4, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 5, priority: 'high' };
+  assert.equal((await request(server, `/api/v1/opportunities/${id}/assessment`, { email: manager, method: 'PUT', body: ratings })).status, 200);
+  assert.equal((await request(server, `/api/v1/opportunities/${id}/assessment`, { email: manager, method: 'PUT', body: ratings })).status, 200);
+
+  const notices = () => request(server, '/api/v1/notifications', { email: staff });
+  const reviewed = await notices();
+  assert.equal(reviewed.body.items.length, 1);
+  assert.equal(reviewed.body.items[0].kind, 'under_review');
+  assert.match(reviewed.body.items[0].message, /now Under Review/);
+  assert.equal((await request(server, `/api/v1/opportunities/${id}/decision`, { email: manager, body: { decision: 'approved', reason: 'Worth doing.' } })).status, 200);
+  assert.equal((await notices()).body.items[0].kind, 'approved');
+  assert.equal((await request(server, '/api/v1/notifications', { email: otherStaff })).body.items.length, 0);
+  assert.equal((await request(server, '/api/v1/notifications', { email: manager })).body.items.length, 0);
+
+  const project = await request(server, '/api/v1/projects', { email: manager, body: { opportunityId: id } });
+  assert.equal(project.status, 201);
+  const projectPath = project.headers.get('location');
+  assert.equal((await notices()).body.items[0].kind, 'approved');
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'in_progress' } })).status, 200);
+  assert.equal((await notices()).body.items[0].kind, 'in_progress');
+  assert.match((await notices()).body.items[0].message, /now In Progress/);
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { note: 'Still in progress.' } })).status, 200);
+  assert.equal((await notices()).body.items.filter((item) => item.kind === 'in_progress').length, 1);
+  assert.equal((await request(server, projectPath, { email: manager, method: 'PATCH', body: { status: 'testing' } })).status, 200);
+  assert.equal((await notices()).body.items[0].kind, 'testing');
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'completed' } })).status, 200);
+  const unread = await notices();
+  assert.deepEqual(unread.body.items.map((item) => item.kind), ['project_completed', 'testing', 'in_progress', 'approved', 'under_review']);
+  assert.equal((await request(server, '/api/v1/notifications', { email: team })).body.items.length, 0);
+
+  const read = await request(server, `/api/v1/notifications/${unread.body.items[3].id}/read`, { email: staff, method: 'POST' });
+  assert.equal(read.status, 204);
+  assert.equal((await notices()).body.items.some((item) => item.kind === 'approved'), false);
+  assert.equal((await request(server, `/api/v1/notifications/${unread.body.items[3].id}/read`, { email: otherStaff, method: 'POST' })).status, 404);
+  assert.equal((await request(server, '/api/v1/notifications/not-an-id/read', { email: staff, method: 'POST' })).status, 404);
 });

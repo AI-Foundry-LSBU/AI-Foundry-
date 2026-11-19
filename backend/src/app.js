@@ -5,6 +5,7 @@ import { authRoutes } from './auth/routes.js';
 import { opportunityRoutes } from './opportunities/routes.js';
 import { projectRoutes } from './projects/routes.js';
 import { benefitRoutes } from './benefits/routes.js';
+import { notificationRoutes } from './notifications/routes.js';
 
 export function createApp(pool, options = {}) {
   const app = express();
@@ -16,7 +17,7 @@ export function createApp(pool, options = {}) {
     res.set('Cache-Control', 'no-store');
     next();
   }, sessions.middleware, authRoutes(pool, sessions, options), sessions.requireUser, requireCsrf,
-  opportunityRoutes(pool), projectRoutes(pool), benefitRoutes(pool));
+  opportunityRoutes(pool), projectRoutes(pool), benefitRoutes(pool), notificationRoutes(pool));
 
   app.use((req, res) => {
     res.status(404).json({ code: 'NOT_FOUND', message: 'Route not found.' });

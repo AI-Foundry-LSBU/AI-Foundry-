@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
+import { notifyStatusChange, visibleStatus } from '../notifications/queries.js';
 import { createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -95,7 +96,23 @@ export function projectRoutes(pool) {
     }
     if (Object.keys(fields).length) return invalid(res, fields);
 
+    const previous = await pool.query(
+      `SELECT p.status, p.opportunity_id, o.status AS opportunity_status
+       FROM projects p
+       JOIN opportunities o ON o.id = p.opportunity_id
+       WHERE p.id = $1`,
+      [id]
+    );
+    const before = previous.rows[0];
     const updated = await updateProject(pool, id, req.user.id, { status, progress, note: text || undefined });
+    if (updated && before && status && status !== before.status) {
+      await notifyStatusChange(pool, {
+        opportunityId: before.opportunity_id,
+        actorId: req.user.id,
+        from: visibleStatus(before.opportunity_status, before.status),
+        to: visibleStatus(before.opportunity_status, status)
+      });
+    }
     return updated ? res.json(projectResponse(await findProject(pool, id))) : notFound(res);
   });
 

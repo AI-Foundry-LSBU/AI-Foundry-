@@ -151,6 +151,56 @@ paths:
           $ref: '#/components/responses/Unauthorised'
         '403':
           description: Missing or invalid CSRF token. Returns CSRF_INVALID.
+  /notifications:
+    get:
+      tags: [Opportunities]
+      operationId: listUnreadNotifications
+      summary: List unread in-app notices for the signed-in account
+      description: |
+        Saved for the person who submitted an opportunity when a manager or
+        engineer changes the status they see: Under Review, Approved, Rejected,
+        In Progress, Testing or Completed. A note or progress estimate on its
+        own does not create one. No email is sent. The person who made the
+        change is not notified.
+      responses:
+        '200':
+          description: Unread notices, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+  /notifications/{id}/read:
+    post:
+      tags: [Opportunities]
+      operationId: markNotificationRead
+      summary: Mark one of your notices as read
+      security:
+        - cookieSession: []
+          csrfToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: The notice is hidden on later visits.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          description: Missing or invalid CSRF token. Returns CSRF_INVALID.
+        '404':
+          $ref: '#/components/responses/NotFound'
   /opportunities:
     post:
       security:
@@ -968,6 +1018,25 @@ components:
             - $ref: '#/components/schemas/UserRef'
           description: Included in the all-opportunities queue.
         submittedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      required: [id, opportunityId, kind, message, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        opportunityId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [under_review, approved, rejected, delivery_started, in_progress, testing, project_completed]
+        message:
+          type: string
+        createdAt:
           type: string
           format: date-time
 
