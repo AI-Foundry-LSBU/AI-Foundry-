@@ -36,32 +36,51 @@ export async function createProject(pool, userId, { opportunityId, startDate, ta
   const { rows } = await pool.query(
     `WITH approved AS (
        SELECT id FROM opportunities WHERE id = $1 AND status = 'approved' FOR UPDATE
+     ), created AS (
+       INSERT INTO projects (opportunity_id, created_by, start_date, target_date)
+       SELECT id, $2, $3, $4 FROM approved
+       ON CONFLICT (opportunity_id) DO NOTHING
+       RETURNING id, opportunity_id, status, created_at
+     ), logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, to_status, actor_id, actor_name, occurred_at
+       )
+       SELECT p.opportunity_id, 'delivery_started', p.status, u.id, u.name, p.created_at
+       FROM created p JOIN users u ON u.id = $2
+       RETURNING opportunity_id
      )
-     INSERT INTO projects (opportunity_id, created_by, start_date, target_date)
-     SELECT id, $2, $3, $4 FROM approved
-     ON CONFLICT (opportunity_id) DO NOTHING
-     RETURNING id`,
+     SELECT p.id FROM created p JOIN logged h ON h.opportunity_id = p.opportunity_id`,
     [opportunityId, userId, startDate, targetDate]
   );
   return rows[0]?.id;
 }
 
 export async function updateProject(pool, id, authorId, { status, progress, note }) {
-  // The status and its note are committed together. A note-only request leaves other fields intact.
+  // The status, note and history are atomic. Unchanged statuses add no event.
   const { rowCount } = await pool.query(
-    `WITH updated AS (
-       UPDATE projects
-       SET status = COALESCE($2, status),
+    `WITH previous AS (
+       SELECT id, status FROM projects WHERE id = $1 FOR UPDATE
+     ), updated AS (
+       UPDATE projects p
+       SET status = COALESCE($2, p.status),
            progress = CASE
-             WHEN COALESCE($2, status) = 'completed' THEN 100
-             ELSE COALESCE($3, progress)
+             WHEN COALESCE($2, p.status) = 'completed' THEN 100
+             ELSE COALESCE($3, p.progress)
            END,
            updated_at = clock_timestamp()
-       WHERE id = $1
-       RETURNING id
+       FROM previous WHERE p.id = previous.id
+       RETURNING p.id, p.opportunity_id, p.status, previous.status AS previous_status
      ), added_note AS (
        INSERT INTO project_progress_notes (project_id, author_id, body, created_at)
        SELECT id, $4, $5::text, clock_timestamp() FROM updated WHERE $5::text IS NOT NULL
+     ), logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, from_status, to_status, actor_id, actor_name
+       )
+       SELECT p.opportunity_id, 'delivery_status_changed', p.previous_status, p.status, u.id, u.name
+       FROM updated p JOIN users u ON u.id = $4
+       WHERE p.previous_status <> p.status
+       RETURNING id
      )
      SELECT id FROM updated`,
     [id, status, progress, authorId, note]
