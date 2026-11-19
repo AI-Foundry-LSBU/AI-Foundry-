@@ -226,6 +226,81 @@ The frontend displays this as **Not set**. The opportunity's approval status
 and a project's delivery status are separate fields. The displayed delivery
 filters use `deliveryStatus` from the response.
 
+## Benefits summary API (US07 backend)
+
+`GET /api/v1/benefits/summary` returns data for a benefits dashboard. It requires
+a signed-in Digital Project Manager. Anonymous requests receive 401; staff and
+engineer accounts receive 403. Existing benefits list/detail permissions are unchanged.
+There are no new dependencies, environment settings or database migrations.
+
+The response contains:
+
+- `totals`: separate `estimated` and `actual` totals for `Hours/month`, `GBP/year`
+  and `Cases/month`. Each unit has its own entry, including zero totals if unused.
+- `projects`: the same totals for each project with benefits, its ID/title, and
+  individual `nonAdditiveBenefits` for `Percent` and `Days` records.
+- `totalBenefitsRecorded`, `projectCount` and `byCategory`: counts of distinct
+  saved benefits and projects with benefits. `completedProjects` counts all
+  completed delivery projects, even those without benefits.
+- `message`: `No benefits have been recorded yet.` when there are no records;
+  otherwise `null`. An all-zero or percentage-only dataset is not an empty dataset.
+
+Values in this summary are **decimal strings**, for example `"12.5000"`, rather
+than JSON numbers. PostgreSQL decimal values are added using integer
+ten-thousandths (`BigInt`) so rounding errors do not accumulate. Strings also
+preserve large totals beyond JavaScript's safe numeric precision. The existing
+US05 record endpoints keep their current numeric response format.
+
+Each benefit ID contributes once. Equal amounts on different IDs are retained;
+using `SUM(DISTINCT amount)` would incorrectly discard legitimate records.
+Project notes are never joined into the benefit dataset. Percentages need a
+shared denominator, and days may represent unrelated durations, so these values
+are shown individually without a sum or average. There is no conversion between
+units or periods. Each saved row is assumed to represent an independent outcome:
+the system cannot infer that two separately entered records describe overlapping
+savings. Edit an existing benefit to correct its value rather than adding a
+second record for the same outcome.
+
+One database statement reads current benefits and completed-project counts from
+the same snapshot. Every request recalculates the summary; no stored totals or
+application cache can become stale after an edit or project reassignment.
+
+To check locally:
+
+1. Start the backend and frontend as described above and sign in as the manager.
+2. Open **Benefits Reporting** and record a benefit on a real project: estimate
+   `12.5`, actual `8.25`, unit `Hours/month`.
+3. Open the browser developer console on the running website and run:
+
+   ```js
+   fetch('/api/v1/benefits/summary', { credentials: 'same-origin' })
+     .then(async response => ({ status: response.status, body: await response.json() }))
+     .then(console.log);
+   ```
+
+4. Check status 200 and the separate values in `body.totals` and `body.projects`.
+   Other saved records also contribute, so totals may exceed the example values.
+5. Edit the same benefit, then repeat the request. Values should change without
+   increasing `totalBenefitsRecorded`. A browser refresh and a new request should
+   give the same saved values.
+
+`src/benefits/summary.js` holds the calculation; `benefitSummaryRecords` in
+`src/benefits/queries.js` loads the records; `src/benefits/routes.js` registers the
+manager-only endpoint before the `/:id` route. Calculation tests are in
+`test/benefits-summary.test.js`; PostgreSQL/API tests are in
+`test/benefits-summary-api.test.js`. Run `npm test` with `TEST_DATABASE_URL` set as
+described above. The calculation-only tests can run without PostgreSQL:
+
+```bash
+node --test test/benefits-summary.test.js
+```
+
+These changes implement the two US07 backend tasks. The existing frontend has
+not been connected to this endpoint; its dashboard still needs estimated/actual
+comparisons and the empty-state message using this response. Loading or
+refreshing the dashboard, and refetching after benefit edits, should request a
+fresh summary.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.

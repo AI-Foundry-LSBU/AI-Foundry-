@@ -17,7 +17,8 @@ info:
     **Sprint scope:** US01 and US02 form the initial submission and tracking
     workflow. Sprint 2 adds manager assessment (US03), project delivery
     (US04), project benefit recording (US05), filtering (US06) and account
-    authentication. The benefits dashboard (US07) is planned for Sprint 3.
+    authentication. Sprint 3 adds the benefits summary API (US07); the dashboard
+    screen must use this summary to display estimated-versus-actual comparisons.
 
     **Sign-in:** provisioned coursework accounts use email and an application
     password. Login creates a PostgreSQL-backed session in the HttpOnly
@@ -55,7 +56,7 @@ tags:
   - name: Delivery
     description: Tracking project delivery (US04)
   - name: Benefits
-    description: Recording project benefits (US05); dashboard planned for US07
+    description: Recording project benefits (US05) and benefits summary data (US07)
 
 security:
   - cookieSession: []
@@ -684,25 +685,48 @@ paths:
     get:
       tags: [Benefits]
       operationId: getBenefitsSummary
-      summary: Benefits dashboard data (US07, planned)
-      description: Planned for Sprint 3. Manager only. Totals across saved project benefits.
+      summary: Benefits dashboard data (US07)
+      description: |
+        Manager only. Reads current saved benefits on every request. Counts each
+        benefit ID once; different IDs with equal values remain separate records.
+        Estimated and actual values are summed separately for Hours/month,
+        GBP/year and Cases/month. Units and reporting periods are never combined.
+        Percent and Days records are returned individually under each project,
+        because no shared denominator or additive duration definition is recorded.
+        Decimal values are strings with four decimal places to preserve precision.
+        No currency conversion, annualisation, averaging or deduplication by
+        description is performed. Each stored benefit is assumed to represent an
+        independent outcome; overlapping outcomes must be corrected in the records.
+        Only projects with benefits appear in projects; completedProjects counts
+        all completed delivery projects, including those with no recorded benefits.
       responses:
         '200':
-          description: Overall impact figures.
+          description: Portfolio totals and project comparisons, or zero totals and an empty message.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BenefitsSummary'
               example:
-                completedProjects: 3
-                totalBenefitsRecorded: 7
+                completedProjects: 1
+                totalBenefitsRecorded: 1
+                projectCount: 1
                 byCategory:
                   - category: efficiency
-                    count: 4
-                  - category: financial
-                    count: 2
-                  - category: service
                     count: 1
+                totals:
+                  - {unit: Hours/month, estimated: '12.5000', actual: '8.2500', benefitCount: 1}
+                  - {unit: GBP/year, estimated: '0.0000', actual: '0.0000', benefitCount: 0}
+                  - {unit: Cases/month, estimated: '0.0000', actual: '0.0000', benefitCount: 0}
+                projects:
+                  - projectId: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
+                    project: Booking automation
+                    benefitCount: 1
+                    totals:
+                      - {unit: Hours/month, estimated: '12.5000', actual: '8.2500', benefitCount: 1}
+                      - {unit: GBP/year, estimated: '0.0000', actual: '0.0000', benefitCount: 0}
+                      - {unit: Cases/month, estimated: '0.0000', actual: '0.0000', benefitCount: 0}
+                    nonAdditiveBenefits: []
+                message: null
         '401':
           $ref: '#/components/responses/Unauthorised'
         '403':
@@ -1247,20 +1271,117 @@ components:
 
     BenefitsSummary:
       type: object
+      required: [completedProjects, totalBenefitsRecorded, projectCount, byCategory, totals, projects, message]
       properties:
         completedProjects:
           type: integer
+          minimum: 0
+          description: All completed delivery projects, even those with no benefits.
         totalBenefitsRecorded:
           type: integer
+          minimum: 0
+          description: Number of distinct saved benefit IDs across all units.
+        projectCount:
+          type: integer
+          minimum: 0
+          description: Number of projects with at least one saved benefit.
         byCategory:
           type: array
           items:
             type: object
+            required: [category, count]
             properties:
               category:
                 $ref: '#/components/schemas/BenefitCategory'
               count:
                 type: integer
+                minimum: 1
+        totals:
+          $ref: '#/components/schemas/BenefitTotals'
+        projects:
+          type: array
+          description: Projects with benefits, ordered by project ID.
+          items:
+            $ref: '#/components/schemas/ProjectBenefitsSummary'
+        message:
+          type: string
+          nullable: true
+          description: No benefits have been recorded yet, or null when records exist.
+
+    BenefitDecimal:
+      type: string
+      pattern: '^-?[0-9]+\.[0-9]{4}$'
+      description: Exact signed decimal with four fractional places; totals are not restricted to the single-record value limit.
+      example: '12.5000'
+
+    BenefitUnitTotal:
+      type: object
+      required: [unit, estimated, actual, benefitCount]
+      properties:
+        unit:
+          type: string
+          enum: [Hours/month, GBP/year, Cases/month]
+        estimated:
+          $ref: '#/components/schemas/BenefitDecimal'
+        actual:
+          $ref: '#/components/schemas/BenefitDecimal'
+        benefitCount:
+          type: integer
+          minimum: 0
+          description: Number of saved benefits contributing to this unit total.
+
+    BenefitTotals:
+      type: array
+      minItems: 3
+      maxItems: 3
+      description: Exactly one entry per additive unit, ordered Hours/month, GBP/year, Cases/month. Missing units have zero totals.
+      items:
+        $ref: '#/components/schemas/BenefitUnitTotal'
+
+    ProjectBenefitsSummary:
+      type: object
+      required: [projectId, project, benefitCount, totals, nonAdditiveBenefits]
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        project:
+          type: string
+          description: Current project title from the linked opportunity.
+        benefitCount:
+          type: integer
+          minimum: 1
+        totals:
+          $ref: '#/components/schemas/BenefitTotals'
+        nonAdditiveBenefits:
+          type: array
+          description: Percent and Days measures, individually compared and ordered by benefit ID.
+          items:
+            $ref: '#/components/schemas/NonAdditiveBenefit'
+
+    NonAdditiveBenefit:
+      type: object
+      required: [id, category, description, measurement, unit, estimated, actual, date]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          $ref: '#/components/schemas/BenefitCategory'
+        description:
+          type: string
+        measurement:
+          type: string
+        unit:
+          type: string
+          enum: [Percent, Days]
+        estimated:
+          $ref: '#/components/schemas/BenefitDecimal'
+        actual:
+          $ref: '#/components/schemas/BenefitDecimal'
+        date:
+          type: string
+          format: date
 
     Error:
       type: object
