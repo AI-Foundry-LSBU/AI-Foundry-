@@ -26,7 +26,7 @@ before(async () => {
   await migrate(pool);
   await seed(pool, testPasswords);
 });
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits CASCADE'));
 after(async () => {
   try {
     await pool?.end();

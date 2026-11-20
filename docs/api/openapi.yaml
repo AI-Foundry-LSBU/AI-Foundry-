@@ -19,6 +19,8 @@ info:
     (US04), project benefit recording (US05), filtering (US06) and account
     authentication. Sprint 3 adds the benefits summary API (US07); the dashboard
     screen must use this summary to display estimated-versus-actual comparisons.
+    The opportunity history API (US08) records subsequent changes and returns
+    a read-only timeline for managers. Its frontend timeline is a separate task.
 
     **Sign-in:** provisioned coursework accounts use email and an application
     password. Login creates a PostgreSQL-backed session in the HttpOnly
@@ -57,6 +59,8 @@ tags:
     description: Tracking project delivery (US04)
   - name: Benefits
     description: Recording project benefits (US05) and benefits summary data (US07)
+  - name: History
+    description: Read-only opportunity and linked delivery timeline (US08)
 
 security:
   - cookieSession: []
@@ -410,6 +414,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /opportunities/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    get:
+      tags: [History]
+      operationId: getOpportunityHistory
+      summary: View the opportunity timeline (US08)
+      description: |
+        Manager only. Returns entries oldest first, ordered by occurredAt and
+        then the increasing history ID to resolve equal timestamps. Each entry
+        identifies its responsible user and records their display name at the
+        time of recording. Opportunity and delivery statuses are distinguished
+        by statusType; project delivery does not change the opportunity's
+        approval status. Decision entries include the saved reason, or null
+        when an approval has no reason. No history write endpoints exist.
+
+        Submission, review transitions, decisions, project creation and delivery
+        status changes are recorded atomically with the corresponding API write.
+        Saving the same status, changing only progress/notes or resaving an
+        assessment without a status change does not add a history event.
+
+        Migration recovers stored submissions and the latest saved decision
+        with their original dates and actor IDs. These entries have source
+        backfill. Earlier overwritten changes cannot be reconstructed. Their
+        fromStatus is null rather than an inferred previous status, and their
+        actor names are the names available at migration time. Future entries
+        have source live. Existing opportunity deletion policy still applies:
+        deleting an eligible opportunity also removes its associated history.
+      responses:
+        '200':
+          description: The selected opportunity's history; items may be empty for an externally imported record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpportunityHistory'
+              example:
+                opportunityId: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
+                items:
+                  - id: '21'
+                    eventType: decision_recorded
+                    statusType: opportunity
+                    fromStatus: in_assessment
+                    toStatus: rejected
+                    actor:
+                      id: 6bfcbbab-9947-417e-9b04-d76efa7cb9b9
+                      name: Demo Manager
+                    reason: Already covered by another project.
+                    occurredAt: '2026-11-19T10:15:00.000Z'
+                    source: live
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /opportunities/{id}/assessment:
     parameters:
@@ -1451,6 +1511,58 @@ components:
         date:
           type: string
           format: date
+
+    OpportunityHistory:
+      type: object
+      required: [opportunityId, items]
+      properties:
+        opportunityId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          description: Chronological entries, oldest first; equal timestamps are ordered by increasing ID.
+          items:
+            $ref: '#/components/schemas/OpportunityHistoryEntry'
+
+    OpportunityHistoryEntry:
+      type: object
+      readOnly: true
+      required: [id, eventType, statusType, fromStatus, toStatus, actor, reason, occurredAt, source]
+      properties:
+        id:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: Database sequence ID represented as a string to preserve bigint precision. Treat as an opaque identifier.
+        eventType:
+          type: string
+          enum: [submitted, status_changed, decision_recorded, delivery_started, delivery_status_changed]
+        statusType:
+          type: string
+          enum: [opportunity, delivery]
+          description: The lifecycle to which fromStatus and toStatus belong.
+        fromStatus:
+          type: string
+          nullable: true
+          enum: [submitted, in_assessment, approved, rejected, not_started, in_progress, testing, completed, null]
+          description: Null for creation events and recovered decisions whose previous status was not stored.
+        toStatus:
+          type: string
+          enum: [submitted, in_assessment, approved, rejected, not_started, in_progress, testing, completed]
+        actor:
+          $ref: '#/components/schemas/UserRef'
+        reason:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Decision reason; required and nonblank for rejections, nullable for approvals, null for other event types.
+        occurredAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [live, backfill]
+          description: Live API event or recovered pre-US08 submission/decision.
 
     Error:
       type: object

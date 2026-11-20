@@ -42,7 +42,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits, notifications'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits CASCADE'));
 
 after(async () => {
   try {
@@ -281,7 +281,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '008_notification_statuses.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql'
   ]);
 });
 

@@ -1,10 +1,20 @@
 export async function insertOpportunity(pool, userId, data) {
   const { rows } = await pool.query(
-    `INSERT INTO opportunities (
-       submitted_by, title, department, problem_description, proposed_improvement,
-       expected_benefits, source, hackathon_name
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING *`,
+    `WITH created AS (
+       INSERT INTO opportunities (
+         submitted_by, title, department, problem_description, proposed_improvement,
+         expected_benefits, source, hackathon_name
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, to_status, actor_id, actor_name, occurred_at
+       )
+       SELECT o.id, 'submitted', o.status, u.id, u.name, o.submitted_at
+       FROM created o JOIN users u ON u.id = $1
+       RETURNING opportunity_id
+     )
+     SELECT o.* FROM created o JOIN logged h ON h.opportunity_id = o.id`,
     [
       userId, data.title, data.department, data.problemDescription, data.proposedImprovement,
       data.expectedBenefits, data.source, data.hackathonName
@@ -81,19 +91,32 @@ export async function findOpportunity(pool, id) {
   return rows[0];
 }
 
-export async function saveAssessment(pool, id, managerId, data) {
-  // Update the opportunity and replace its assessment together in one statement.
+export async function findOpportunityHistory(pool, id) {
+  // One snapshot distinguishes a missing opportunity from an empty timeline.
   const { rows } = await pool.query(
-    `WITH existing AS (
-       SELECT id, status AS previous_status FROM opportunities WHERE id = $1
+    `SELECT o.id AS requested_opportunity_id, h.*
+     FROM opportunities o
+     LEFT JOIN opportunity_history h ON h.opportunity_id = o.id
+     WHERE o.id = $1
+     ORDER BY h.occurred_at ASC, h.id ASC`,
+    [id]
+  );
+  if (!rows.length) return undefined;
+  return { opportunityId: rows[0].requested_opportunity_id, rows: rows.filter((row) => row.id !== null) };
+}
+
+export async function saveAssessment(pool, id, managerId, data) {
+  // Lock the old status, then save the assessment and any transition together.
+  const { rows } = await pool.query(
+    `WITH previous AS (
+       SELECT id, status FROM opportunities WHERE id = $1 FOR UPDATE
      ), updated AS (
-       UPDATE opportunities AS o
+       UPDATE opportunities o
        SET priority = $3, category = $4,
            status = CASE WHEN o.status = 'submitted' THEN 'in_assessment' ELSE o.status END,
            updated_at = CURRENT_TIMESTAMP
-       FROM existing
-       WHERE o.id = existing.id
-       RETURNING o.*, existing.previous_status
+       FROM previous WHERE o.id = previous.id
+       RETURNING o.*, previous.status AS previous_status
      ), saved AS (
        INSERT INTO opportunity_assessments (
          opportunity_id, assessed_by, strategic_alignment, benefit_potential,
@@ -110,6 +133,15 @@ export async function saveAssessment(pool, id, managerId, data) {
            notes = EXCLUDED.notes,
            assessed_at = CURRENT_TIMESTAMP
        RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, from_status, to_status, actor_id, actor_name
+       )
+       SELECT o.id, 'status_changed', previous.status, o.status, u.id, u.name
+       FROM updated o JOIN previous ON previous.id = o.id
+       JOIN users u ON u.id = $2
+       WHERE previous.status <> o.status
+       RETURNING id
      )
      SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
@@ -133,15 +165,28 @@ export async function saveAssessment(pool, id, managerId, data) {
 export async function saveDecision(pool, id, managerId, { decision, reason }) {
   // The status guard makes concurrent or repeated decisions fail without overwriting the first one.
   const { rows } = await pool.query(
-    `WITH updated AS (
-       UPDATE opportunities
+    `WITH previous AS (
+       SELECT id, status FROM opportunities
+       WHERE id = $1 AND status = 'in_assessment' FOR UPDATE
+     ), updated AS (
+       UPDATE opportunities o
        SET status = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND status = 'in_assessment'
-       RETURNING *
+       FROM previous WHERE o.id = previous.id AND o.status = 'in_assessment'
+       RETURNING o.*
      ), saved AS (
        INSERT INTO opportunity_decisions (opportunity_id, decided_by, decision, reason)
        SELECT id, $2, $3, $4 FROM updated
        RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, from_status, to_status, actor_id, actor_name, reason, occurred_at
+       )
+       SELECT o.id, 'decision_recorded', previous.status, d.decision,
+              u.id, u.name, d.reason, d.decided_at
+       FROM updated o JOIN previous ON previous.id = o.id
+       JOIN saved d ON d.opportunity_id = o.id
+       JOIN users u ON u.id = d.decided_by
+       RETURNING id
      )
      SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
