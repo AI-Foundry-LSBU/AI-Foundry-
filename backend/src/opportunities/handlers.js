@@ -1,6 +1,5 @@
 import { notifySubmitter } from '../notifications/queries.js';
-import { listHistory } from './history.js';
-import { deleteOpportunity, findOpportunities, findOpportunity, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
+import { deleteOpportunity, findOpportunities, findOpportunity, findOpportunityHistory, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
 import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
 import { canReadOpportunity } from '../auth/permissions.js';
 
@@ -140,18 +139,6 @@ export function getOpportunity(pool) {
   };
 }
 
-export function getOpportunityHistory(pool) {
-  return async (req, res) => {
-    const { id } = req.params;
-    const row = uuidPattern.test(id) ? await findOpportunity(pool, id) : undefined;
-    if (!row) {
-      return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
-    }
-    if (!canReadOpportunity(req.user, row)) return forbidden(res);
-    return res.json({ items: await listHistory(pool, id) });
-  };
-}
-
 export function assessOpportunity(pool) {
   return async (req, res) => {
     if (req.user.role !== 'manager') return forbidden(res);
@@ -167,6 +154,31 @@ export function assessOpportunity(pool) {
       await notifySubmitter(pool, { opportunityId: row.id, actorId: req.user.id, kind: 'under_review' });
     }
     return res.json(opportunityResponse(row, row.submitter_name));
+  };
+}
+
+export function getOpportunityHistory(pool) {
+  return async (req, res) => {
+    if (req.user.role !== 'manager') return forbidden(res);
+    const { id } = req.params;
+    const history = uuidPattern.test(id) ? await findOpportunityHistory(pool, id) : undefined;
+    if (!history) {
+      return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
+    }
+    return res.json({
+      opportunityId: history.opportunityId,
+      items: history.rows.map((row) => ({
+        id: row.id,
+        eventType: row.event_type,
+        statusType: row.event_type.startsWith('delivery_') ? 'delivery' : 'opportunity',
+        fromStatus: row.from_status,
+        toStatus: row.to_status,
+        actor: { id: row.actor_id, name: row.actor_name },
+        reason: row.reason,
+        occurredAt: row.occurred_at,
+        source: row.source
+      }))
+    });
   };
 }
 

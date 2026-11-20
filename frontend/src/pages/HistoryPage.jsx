@@ -56,7 +56,7 @@ export function HistoryPage() {
                 <StatusBadge status="Completed" />
               </td>
               <td>
-                <button
+                {role === "Digital Project Manager" && <button
                   type="button"
                   className="text-button"
                   onClick={(event) => {
@@ -65,7 +65,7 @@ export function HistoryPage() {
                   }}
                 >
                   Opportunity history
-                </button>
+                </button>}
               </td>
             </tr>)}
           </tbody>

@@ -110,7 +110,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     targetDate: ""
   });
   useEffect(() => {
-    if (!isLive) return undefined;
+    if (!isLive || role !== "Digital Project Manager") return undefined;
     const controller = new AbortController();
     getOpportunityHistory(currentUser.email, initialOpportunity.id, controller.signal).then(
       (items) => setHistory({ loading: false, items, error: null }),
@@ -119,7 +119,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
       },
     );
     return () => controller.abort();
-  }, [isLive, currentUser.email, initialOpportunity.id, historyAttempt]);
+  }, [isLive, role, currentUser.email, initialOpportunity.id, historyAttempt]);
   const isManager = role === "Digital Project Manager";
   const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
@@ -363,7 +363,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
       </Card>}
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
-          {isLive && <Card>
+          {isLive && isManager && <Card>
             <div className="card-header">
               <div>
                 <h2>History</h2>

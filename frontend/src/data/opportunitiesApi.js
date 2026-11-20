@@ -77,9 +77,34 @@ export function getApprovedOpportunities(email, signal) {
   return getOpportunityPages(email, "/opportunities", signal, "approved");
 }
 
+const historyStatusLabels = {
+  submitted: "Submitted",
+  in_assessment: "Under Review",
+  approved: "Approved",
+  rejected: "Rejected",
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  testing: "Testing",
+  completed: "Completed",
+};
+
+function historySummary(item) {
+  if (item.eventType === "submitted") return "Opportunity submitted.";
+  if (item.eventType === "decision_recorded" && item.toStatus === "approved") return "Opportunity approved.";
+  if (item.eventType === "decision_recorded" && item.toStatus === "rejected") return "Opportunity rejected.";
+  if (item.eventType === "delivery_started") return "Moved to project delivery.";
+  return `Status changed to ${historyStatusLabels[item.toStatus] ?? item.toStatus}.`;
+}
+
 export async function getOpportunityHistory(email, id, signal) {
   const data = await request(email, `/opportunities/${encodeURIComponent(id)}/history`, { signal });
-  return data.items;
+  return data.items.map((item) => ({
+    id: item.id,
+    summary: historySummary(item),
+    reason: item.reason || undefined,
+    actor: item.actor,
+    createdAt: item.occurredAt,
+  }));
 }
 
 export async function getOpportunity(email, id, signal) {

@@ -1,7 +1,6 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
 import { notifyStatusChange, visibleStatus } from '../notifications/queries.js';
-import { recordHistory } from '../opportunities/history.js';
 import { createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -122,13 +121,6 @@ export function projectRoutes(pool) {
         from,
         to
       });
-      if (from !== to) {
-        await recordHistory(pool, {
-          opportunityId: before.opportunity_id,
-          actorId: req.user.id,
-          kind: status === 'not_started' ? 'not_started' : to
-        });
-      }
     }
     return updated ? res.json(projectResponse(await findProject(pool, id))) : notFound(res);
   });
