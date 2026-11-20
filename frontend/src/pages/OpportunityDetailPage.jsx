@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -8,9 +8,9 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity, getOpportunityDisplayStatus, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
-import { createDeliveryProject } from "../data/projectsApi";
+import { createDeliveryProject, deliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
 import {
   Button,
   Card,
@@ -99,10 +99,27 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [pipelineError, setPipelineError] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
+  const [history, setHistory] = useState({ loading: isLive, items: [], error: null });
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [deliveryOverride, setDeliveryOverride] = useState(null);
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const [projectForm, setProjectForm] = useState({
     startDate: "",
     targetDate: ""
   });
+  useEffect(() => {
+    if (!isLive) return undefined;
+    const controller = new AbortController();
+    getOpportunityHistory(currentUser.email, initialOpportunity.id, controller.signal).then(
+      (items) => setHistory({ loading: false, items, error: null }),
+      (error) => {
+        if (error.name !== "AbortError") setHistory({ loading: false, items: [], error });
+      },
+    );
+    return () => controller.abort();
+  }, [isLive, currentUser.email, initialOpportunity.id, historyAttempt]);
   const isManager = role === "Digital Project Manager";
   const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
@@ -117,7 +134,23 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             Return to dashboard
           </Button>}
     />;
-  const deliveryStatus = opportunity.deliveryStatus ?? initialOpportunity.deliveryStatus;
+  const deliveryStatus = deliveryOverride ?? opportunity.deliveryStatus ?? initialOpportunity.deliveryStatus;
+  const completedDelivery = deliveryStatus === "Completed";
+  const changeDeliveryStatus = async (next) => {
+    if (!isLive || !projectId || next === deliveryStatus || statusSaving || completedDelivery) return;
+    setStatusError("");
+    setStatusSaving(true);
+    try {
+      const updated = await updateDeliveryProject(currentUser.email, projectId, { status: next });
+      setDeliveryOverride(updated.status);
+      setPendingStatus(null);
+      setHistoryAttempt((current) => current + 1);
+    } catch (error) {
+      setStatusError(error.message);
+    } finally {
+      setStatusSaving(false);
+    }
+  };
   const displayStatus = getOpportunityDisplayStatus({ status: opportunity.status, deliveryStatus });
   const deliveryStages = deliveryStatus ? ["In Progress", "Testing", "Completed"] : ["In Progress", "Completed"];
   const rejected = opportunity.status === "Rejected";
@@ -155,6 +188,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
       const updated = await saveOpportunityAssessment(currentUser.email, opportunity.id, { ...scores, priority, category, notes });
       setSavedOpportunity(updated);
       setMessage("Assessment saved successfully.");
+      setHistoryAttempt((current) => current + 1);
     } catch (error) {
       setSaveError(error.message);
     } finally {
@@ -189,6 +223,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
         setSavedOpportunity(updated);
         setMessage(`Opportunity ${updated.status.toLowerCase()}.`);
         setPendingDecision(null);
+        setHistoryAttempt((current) => current + 1);
       } catch (error) {
         setSaveError(error.fields?.reason ?? error.message);
       } finally {
@@ -298,8 +333,61 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               </div>)}
           </div>
       </Card>
+      {isLive && projectId && !isStaff && <Card>
+        <div className="card-header">
+          <div>
+            <h2>Delivery status</h2>
+            <p>{completedDelivery ? "A completed project stays completed." : "Selecting a new status asks you to confirm."}</p>
+          </div>
+          <StatusBadge status={deliveryStatus} />
+        </div>
+        <div className="delivery-status-update">
+          <Field label="Status">
+            <select
+              aria-label={`Delivery status for ${opportunity.title}`}
+              value={deliveryStatus}
+              disabled={statusSaving || completedDelivery}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next !== deliveryStatus) {
+                  setStatusError("");
+                  setPendingStatus(next);
+                }
+              }}
+            >
+              {deliveryStatuses.map((item) => <option key={item}>{item}</option>)}
+            </select>
+          </Field>
+          {statusError && !pendingStatus && <p role="alert" className="error-text">{statusError}</p>}
+        </div>
+      </Card>}
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
+          {isLive && <Card>
+            <div className="card-header">
+              <div>
+                <h2>History</h2>
+                <p>Status changes and decisions, oldest first. Previous entries cannot be edited.</p>
+              </div>
+            </div>
+            {history.loading && <p role="status">Loading history…</p>}
+            {history.error && <div role="alert">
+              <EmptyState title="Could not load history" text={history.error.message} action={<Button onClick={() => setHistoryAttempt((current) => current + 1)}>Try again</Button>} />
+            </div>}
+            {!history.loading && !history.error && history.items.length === 0 && <p className="activity-empty">No history recorded yet.</p>}
+            {history.items.length > 0 && <div className="activity-list">
+              {history.items.map((item) => <div className="activity-item" key={item.id}>
+                <div className="activity-dot" />
+                <div>
+                  <strong>{item.summary}</strong>
+                  {item.reason && <p className="history-reason">{item.reason}</p>}
+                  <span>{item.actor.name} · {new Date(item.createdAt).toLocaleString("en-GB", {
+                    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+                  })}</span>
+                </div>
+              </div>)}
+            </div>}
+          </Card>}
           <Card>
             <div className="card-header">
               <div>
@@ -599,6 +687,25 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             </div>
           </div>
         </Modal>}
+      {pendingStatus && <Modal
+        title={`Change status to ${pendingStatus}?`}
+        onClose={() => { if (!statusSaving) setPendingStatus(null); }}
+      >
+        <div className="confirm-content">
+          <p>
+            {pendingStatus === "Completed"
+              ? <>Mark this project as <strong>Completed</strong>? It will move to History and the status cannot be changed afterwards.</>
+              : <>Change the delivery status from <strong>{deliveryStatus}</strong> to <strong>{pendingStatus}</strong>?</>}
+          </p>
+          {statusError && <p role="alert" className="error-text">{statusError}</p>}
+          <div className="modal-actions">
+            <Button type="button" variant="secondary" disabled={statusSaving} onClick={() => setPendingStatus(null)}>Cancel</Button>
+            <Button type="button" disabled={statusSaving} onClick={() => changeDeliveryStatus(pendingStatus)}>
+              {statusSaving ? "Saving…" : "Confirm status"}
+            </Button>
+          </div>
+        </div>
+      </Modal>}
       {pipelineOpen && <Modal
     title="Move to Project Delivery"
     onClose={() => { if (!creatingProject) setPipelineOpen(false); }}

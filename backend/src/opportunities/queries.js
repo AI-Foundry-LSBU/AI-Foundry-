@@ -1,10 +1,16 @@
 export async function insertOpportunity(pool, userId, data) {
   const { rows } = await pool.query(
-    `INSERT INTO opportunities (
-       submitted_by, title, department, problem_description, proposed_improvement,
-       expected_benefits, source, hackathon_name
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING *`,
+    `WITH created AS (
+       INSERT INTO opportunities (
+         submitted_by, title, department, problem_description, proposed_improvement,
+         expected_benefits, source, hackathon_name
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (opportunity_id, actor_id, kind, created_at)
+       SELECT id, submitted_by, 'submitted', submitted_at FROM created
+     )
+     SELECT * FROM created`,
     [
       userId, data.title, data.department, data.problemDescription, data.proposedImprovement,
       data.expectedBenefits, data.source, data.hackathonName
@@ -110,6 +116,10 @@ export async function saveAssessment(pool, id, managerId, data) {
            notes = EXCLUDED.notes,
            assessed_at = CURRENT_TIMESTAMP
        RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (opportunity_id, actor_id, kind)
+       SELECT id, $2, 'under_review' FROM updated
+       WHERE previous_status = 'submitted'
      )
      SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
@@ -142,6 +152,9 @@ export async function saveDecision(pool, id, managerId, { decision, reason }) {
        INSERT INTO opportunity_decisions (opportunity_id, decided_by, decision, reason)
        SELECT id, $2, $3, $4 FROM updated
        RETURNING *
+     ), logged AS (
+       INSERT INTO opportunity_history (opportunity_id, actor_id, kind, reason)
+       SELECT id, $2, $3, NULLIF(btrim($4), '') FROM updated
      )
      SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,

@@ -360,6 +360,34 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorised'
 
+  /opportunities/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    get:
+      tags: [Opportunities]
+      operationId: getOpportunityHistory
+      summary: View the history of an opportunity
+      description: |
+        Returns status changes and decisions in chronological order.
+        Each entry names the responsible user and the date. Decision
+        reasons are included. History entries cannot be edited.
+        Staff can read history for their own opportunities. Managers
+        can read any. Engineers can read approved opportunities and
+        their own submissions.
+      responses:
+        '200':
+          description: History entries, oldest first. The list can be empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpportunityHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /opportunities/{id}:
     parameters:
       - $ref: '#/components/parameters/OpportunityId'
@@ -580,7 +608,8 @@ paths:
         Managers and team members can update projects. Only supplied fields
         are changed. A note is appended with the current user's name and
         timestamp. The status and note are saved together. Setting status
-        to `completed` sets the progress estimate to 100%.
+        to `completed` sets the progress estimate to 100%. A completed
+        project stays completed: a later status change is rejected.
       requestBody:
         required: true
         content:
@@ -598,6 +627,15 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/ProjectNotFound'
+        '409':
+          description: The project is completed and its status cannot be changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: COMPLETED
+                message: A completed project stays completed.
 
   /benefits:
     get:
@@ -1039,6 +1077,30 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    OpportunityHistory:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              kind:
+                type: string
+                enum: [submitted, under_review, approved, rejected, delivery_started, in_progress, testing, completed, not_started]
+              summary:
+                type: string
+              reason:
+                type: string
+              actor:
+                $ref: '#/components/schemas/UserRef'
+              createdAt:
+                type: string
+                format: date-time
 
     Opportunity:
       type: object

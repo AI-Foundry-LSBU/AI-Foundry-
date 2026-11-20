@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
 import { notifyStatusChange, visibleStatus } from '../notifications/queries.js';
+import { recordHistory } from '../opportunities/history.js';
 import { createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -104,14 +105,30 @@ export function projectRoutes(pool) {
       [id]
     );
     const before = previous.rows[0];
+    if (!before) return notFound(res);
+    if (before.status === 'completed' && status !== undefined && status !== 'completed') {
+      return res.status(409).json({
+        code: 'COMPLETED',
+        message: 'A completed project stays completed.'
+      });
+    }
     const updated = await updateProject(pool, id, req.user.id, { status, progress, note: text || undefined });
-    if (updated && before && status && status !== before.status) {
+    if (updated && status && status !== before.status) {
+      const from = visibleStatus(before.opportunity_status, before.status);
+      const to = visibleStatus(before.opportunity_status, status);
       await notifyStatusChange(pool, {
         opportunityId: before.opportunity_id,
         actorId: req.user.id,
-        from: visibleStatus(before.opportunity_status, before.status),
-        to: visibleStatus(before.opportunity_status, status)
+        from,
+        to
       });
+      if (from !== to) {
+        await recordHistory(pool, {
+          opportunityId: before.opportunity_id,
+          actorId: req.user.id,
+          kind: status === 'not_started' ? 'not_started' : to
+        });
+      }
     }
     return updated ? res.json(projectResponse(await findProject(pool, id))) : notFound(res);
   });

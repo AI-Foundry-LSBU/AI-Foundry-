@@ -14,6 +14,7 @@ import {
   Card,
   EmptyState,
   Field,
+  Modal,
   PriorityBadge,
   StatusBadge,
   formatMeasure
@@ -58,6 +59,29 @@ function ProjectDetail({ initialProject, isLive }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const confirmStatus = async () => {
+    if (!pendingStatus || saving || project.status === "Completed") return;
+    if (!isLive) {
+      updateProject(project.id, { status: pendingStatus }, `Project status changed to ${pendingStatus}.`);
+      setPendingStatus(null);
+      return;
+    }
+    setFeedback(null);
+    setSaving(true);
+    try {
+      const updated = await updateDeliveryProject(currentUser.email, project.id, { status: pendingStatus });
+      setSavedProject(updated);
+      setStatus(updated.status);
+      setProgress(updated.progress);
+      setPendingStatus(null);
+      setFeedback({ message: `Status changed to ${updated.status}.` });
+    } catch (error) {
+      setFeedback({ error: true, message: Object.values(error.fields ?? {})[0] ?? error.message });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const saveProgress = async (event) => {
     event.preventDefault();
@@ -66,7 +90,7 @@ function ProjectDetail({ initialProject, isLive }) {
     setSaving(true);
     try {
       const updated = await updateDeliveryProject(currentUser.email, project.id, {
-        status: status === project.status ? undefined : status,
+        status: project.status === "Completed" || status === project.status ? undefined : status,
         progress: status === "Completed" || progress === project.progress ? undefined : progress,
         note: note.trim() || undefined,
       });
@@ -90,8 +114,8 @@ function ProjectDetail({ initialProject, isLive }) {
     setNote("");
   };
   return <>
-      <button className="back-link" onClick={() => navigate("/pipeline")}>
-        <ArrowLeft size={17} /> Back to Project Delivery
+      <button className="back-link" onClick={() => navigate(project.status === "Completed" ? "/history" : "/pipeline")}>
+        <ArrowLeft size={17} /> {project.status === "Completed" ? "Back to History" : "Back to Project Delivery"}
       </button>
       <div className="detail-heading">
         <div>
@@ -241,8 +265,15 @@ function ProjectDetail({ initialProject, isLive }) {
             </div>
           </div>
           {isLive ? <form onSubmit={saveProgress}>
-            <Field label="Current status">
-              <select value={status} disabled={saving} onChange={(event) => setStatus(event.target.value)}>
+            <Field label="Current status" helper={project.status === "Completed" ? "A completed project stays completed." : "Selecting a new status asks you to confirm."}>
+              <select
+                value={status}
+                disabled={saving || project.status === "Completed"}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (next !== project.status) setPendingStatus(next);
+                }}
+              >
                 {deliveryStatuses.map((item) => <option key={item}>{item}</option>)}
               </select>
             </Field>
@@ -275,14 +306,13 @@ function ProjectDetail({ initialProject, isLive }) {
               {saving ? "Saving…" : "Save Progress"}
             </Button>
           </form> : <>
-          <Field label="Current status">
+          <Field label="Current status" helper={project.status === "Completed" ? "A completed project stays completed." : undefined}>
             <select
     value={project.status}
-    onChange={(event) => updateProject(
-      project.id,
-      { status: event.target.value },
-      `Project status changed to ${event.target.value}.`
-    )}
+    disabled={project.status === "Completed"}
+    onChange={(event) => {
+      if (event.target.value !== project.status) setPendingStatus(event.target.value);
+    }}
   >
               {projectStatuses.map((item) => <option key={item}>{item}</option>)}
             </select>
@@ -321,5 +351,24 @@ function ProjectDetail({ initialProject, isLive }) {
           </>}
         </Card>
       </div>
+      {pendingStatus && <Modal
+        title={`Change status to ${pendingStatus}?`}
+        onClose={() => { if (!saving) setPendingStatus(null); }}
+      >
+        <div className="confirm-content">
+          <p>
+            {pendingStatus === "Completed"
+              ? <>Mark this project as <strong>Completed</strong>? It will move to History and the status cannot be changed afterwards.</>
+              : <>Change the delivery status from <strong>{project.status}</strong> to <strong>{pendingStatus}</strong>?</>}
+          </p>
+          {feedback?.error && <p role="alert" className="error-text">{feedback.message}</p>}
+          <div className="modal-actions">
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => setPendingStatus(null)}>Cancel</Button>
+            <Button type="button" disabled={saving} onClick={confirmStatus}>
+              {saving ? "Saving…" : "Confirm status"}
+            </Button>
+          </div>
+        </div>
+      </Modal>}
     </>;
 }

@@ -1,4 +1,5 @@
 import { notifySubmitter } from '../notifications/queries.js';
+import { listHistory } from './history.js';
 import { deleteOpportunity, findOpportunities, findOpportunity, insertOpportunity, saveAssessment, saveDecision } from './queries.js';
 import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
 import { canReadOpportunity } from '../auth/permissions.js';
@@ -136,6 +137,18 @@ export function getOpportunity(pool) {
     }
 
     return res.json(opportunityResponse(row, row.submitter_name));
+  };
+}
+
+export function getOpportunityHistory(pool) {
+  return async (req, res) => {
+    const { id } = req.params;
+    const row = uuidPattern.test(id) ? await findOpportunity(pool, id) : undefined;
+    if (!row) {
+      return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
+    }
+    if (!canReadOpportunity(req.user, row)) return forbidden(res);
+    return res.json({ items: await listHistory(pool, id) });
   };
 }
 

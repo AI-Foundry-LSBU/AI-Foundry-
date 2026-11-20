@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { BenefitsPage } from "./pages/BenefitsPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { OpportunitiesPage } from "./pages/OpportunitiesPage";
 import { OpportunityDetailPage } from "./pages/OpportunityDetailPage";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "opportunities", Component: OpportunitiesPage },
       { path: "opportunities/:id", Component: OpportunityDetailPage },
       { path: "pipeline", Component: PipelinePage },
+      { path: "history", Component: HistoryPage },
       { path: "projects/:id", Component: ProjectDetailPage },
       { path: "benefits", Component: BenefitsPage },
       { path: "*", Component: NotFoundPage },

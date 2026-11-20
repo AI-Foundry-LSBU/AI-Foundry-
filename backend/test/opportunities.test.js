@@ -42,7 +42,7 @@ before(async () => {
   await seed(pool);
 });
 
-beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits, notifications'));
+beforeEach(() => pool.query('TRUNCATE opportunities, opportunity_assessments, opportunity_decisions, projects, project_progress_notes, project_benefits, notifications, opportunity_history'));
 
 after(async () => {
   try {
@@ -281,7 +281,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '008_notification_statuses.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '008_notification_statuses.sql', '009_opportunity_history.sql'
   ]);
 });
 
@@ -719,4 +719,47 @@ test('the submitter is notified when a manager or engineer changes the status', 
   assert.equal((await notices()).body.items.some((item) => item.kind === 'approved'), false);
   assert.equal((await request(server, `/api/v1/notifications/${unread.body.items[3].id}/read`, { email: otherStaff, method: 'POST' })).status, 404);
   assert.equal((await request(server, '/api/v1/notifications/not-an-id/read', { email: staff, method: 'POST' })).status, 404);
+});
+
+test('opportunity history records status changes and a completed project stays completed', async (t) => {
+  const server = await listen(createApp(pool));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const created = await request(server, '/api/v1/opportunities', { email: staff, body: submission });
+  const id = created.body.id;
+  const historyPath = `/api/v1/opportunities/${id}/history`;
+  const submitted = await request(server, historyPath, { email: staff });
+  assert.equal(submitted.status, 200);
+  assert.equal(submitted.body.items.length, 1);
+  assert.equal(submitted.body.items[0].kind, 'submitted');
+  assert.equal(submitted.body.items[0].summary, 'Opportunity submitted.');
+  assert.equal(submitted.body.items[0].actor.name, 'Demo Staff');
+  assert.ok(submitted.body.items[0].createdAt);
+  assert.equal((await request(server, historyPath, { email: otherStaff })).status, 403);
+  assert.equal((await request(server, `/api/v1/opportunities/${randomUUID()}/history`, { email: manager })).status, 404);
+
+  const ratings = { strategicAlignment: 4, benefitPotential: 4, complexity: 3, resourceRequirements: 2, speedToValue: 5, priority: 'high' };
+  assert.equal((await request(server, `/api/v1/opportunities/${id}/assessment`, { email: manager, method: 'PUT', body: ratings })).status, 200);
+  assert.equal((await request(server, `/api/v1/opportunities/${id}/decision`, {
+    email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
+  })).status, 200);
+  const project = await request(server, '/api/v1/projects', { email: manager, body: { opportunityId: id } });
+  const projectPath = project.headers.get('location');
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'completed' } })).status, 200);
+
+  const history = await request(server, historyPath, { email: manager });
+  assert.deepEqual(history.body.items.map((item) => item.kind), [
+    'submitted', 'under_review', 'approved', 'delivery_started', 'completed'
+  ]);
+  assert.equal(history.body.items[2].reason, 'Ready for delivery.');
+  assert.equal(history.body.items[2].actor.name, 'Demo Manager');
+  const times = history.body.items.map((item) => Date.parse(item.createdAt));
+  assert.deepEqual(times, [...times].sort((left, right) => left - right));
+
+  const locked = await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'in_progress' } });
+  assert.equal(locked.status, 409);
+  assert.equal(locked.body.code, 'COMPLETED');
+  assert.equal((await request(server, projectPath, { email: manager })).body.status, 'completed');
+  const after = await request(server, historyPath, { email: manager });
+  assert.equal(after.body.items.at(-1).kind, 'completed');
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { note: 'Finished and handed over.' } })).status, 200);
 });

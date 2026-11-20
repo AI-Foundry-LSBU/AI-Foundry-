@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   Gauge,
+  History,
   LogOut,
   Menu,
   Network,
@@ -28,11 +29,13 @@ const managementNav = [
   { to: "/dashboard", label: "Management Dashboard", icon: Gauge },
   { to: "/opportunities", label: "All Opportunities", icon: ClipboardList },
   { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
+  { to: "/history", label: "History", icon: History },
   { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
 const engineerNav = [
   { to: "/dashboard", label: "Delivery Dashboard", icon: Gauge },
   { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
+  { to: "/history", label: "History", icon: History },
   { to: "/opportunities", label: "Approved Opportunities", icon: ClipboardList },
   { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
@@ -51,6 +54,7 @@ function pageTitle(pathname, role) {
     return "All Opportunities";
   }
   if (section === "pipeline") return "Project Delivery";
+  if (section === "history") return "History";
   if (section === "projects") return "Project Details";
   if (section === "benefits") return "Benefits Reporting";
   return "AI Foundry";

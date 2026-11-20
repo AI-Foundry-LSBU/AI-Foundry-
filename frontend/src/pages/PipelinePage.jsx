@@ -35,12 +35,12 @@ export function PipelinePage() {
   if (delivery.error) return <div role="alert">
     <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
   </div>;
-  const projects = delivery.data;
-  const statuses = delivery.isLive ? deliveryStatuses : projectStatuses;
+  const projects = delivery.data.filter((project) => project.status !== "Completed");
+  const statuses = (delivery.isLive ? deliveryStatuses : projectStatuses).filter((status) => status !== "Completed");
   return <>
       <PageHeader
     title="Project Delivery"
-    subtitle="Track approved projects from planning to completion."
+    subtitle="Track approved projects until they are completed. Completed projects stay in History."
     actions={<div className="view-toggle">
             <button
       className={view === "kanban" ? "active" : ""}
@@ -57,8 +57,11 @@ export function PipelinePage() {
           </div>}
   />
       {projects.length === 0 ? <EmptyState
-        title="No delivery projects yet"
-        text="A Digital Project Manager can move an approved opportunity to Project Delivery."
+        title={delivery.data.length ? "Completed projects are in History" : "No delivery projects yet"}
+        text={delivery.data.length
+          ? "A completed project stays in History and its status cannot be changed."
+          : "A Digital Project Manager can move an approved opportunity to Project Delivery."}
+        action={delivery.data.length ? <Button onClick={() => navigate("/history")}>History</Button> : undefined}
       /> : view === "kanban" ? <div className="kanban">
           {statuses.map((status) => <div className="kanban-column" key={status}>
               <div className="kanban-title">

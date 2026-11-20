@@ -38,8 +38,9 @@ export function OpportunitiesPage() {
     </div>;
 
   const statusOptions = ["All", ...opportunityStatuses];
-  if (useLiveList) statusOptions.push("In Progress", "Testing", "Completed");
-  const scoped = useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
+  if (useLiveList) statusOptions.push("In Progress", "Testing");
+  const scoped = (useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved"))
+    .filter((item) => isStaff || getOpportunityDisplayStatus(item) !== "Completed");
   const departmentOptions = Array.from(new Set([
     ...departments, ...scoped.map((item) => item.department),
   ])).sort((a, b) => a.localeCompare(b));

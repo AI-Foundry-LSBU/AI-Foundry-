@@ -137,7 +137,7 @@ function ManagerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {opportunities.slice(0, 5).map((item) => <tr
+                {opportunities.filter((item) => getOpportunityDisplayStatus(item) !== "Completed").slice(0, 5).map((item) => <tr
     key={item.id}
     onClick={() => navigate(`/opportunities/${item.id}`)}
   >
@@ -199,7 +199,7 @@ function ManagerDashboard() {
             <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
           </div>}
           <div className="project-overview">
-            {projects.slice(0, 3).map((project) => {
+            {projects.filter((project) => project.status !== "Completed").slice(0, 3).map((project) => {
     const progress = project.progress;
     return <button
       type="button"
@@ -327,7 +327,7 @@ function EngineerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {projects.map((project) => <tr
+                {projects.filter((project) => project.status !== "Completed").map((project) => <tr
     key={project.id}
     onClick={() => navigate(`/projects/${project.id}`)}
   >

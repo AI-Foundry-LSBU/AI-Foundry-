@@ -36,11 +36,16 @@ export async function createProject(pool, userId, { opportunityId, startDate, ta
   const { rows } = await pool.query(
     `WITH approved AS (
        SELECT id FROM opportunities WHERE id = $1 AND status = 'approved' FOR UPDATE
+     ), created AS (
+       INSERT INTO projects (opportunity_id, created_by, start_date, target_date)
+       SELECT id, $2, $3, $4 FROM approved
+       ON CONFLICT (opportunity_id) DO NOTHING
+       RETURNING id, opportunity_id, created_by, created_at
+     ), logged AS (
+       INSERT INTO opportunity_history (opportunity_id, actor_id, kind, created_at)
+       SELECT opportunity_id, created_by, 'delivery_started', created_at FROM created
      )
-     INSERT INTO projects (opportunity_id, created_by, start_date, target_date)
-     SELECT id, $2, $3, $4 FROM approved
-     ON CONFLICT (opportunity_id) DO NOTHING
-     RETURNING id`,
+     SELECT id FROM created`,
     [opportunityId, userId, startDate, targetDate]
   );
   return rows[0]?.id;

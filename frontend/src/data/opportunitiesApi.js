@@ -77,6 +77,11 @@ export function getApprovedOpportunities(email, signal) {
   return getOpportunityPages(email, "/opportunities", signal, "approved");
 }
 
+export async function getOpportunityHistory(email, id, signal) {
+  const data = await request(email, `/opportunities/${encodeURIComponent(id)}/history`, { signal });
+  return data.items;
+}
+
 export async function getOpportunity(email, id, signal) {
   const data = await request(email, `/opportunities/${encodeURIComponent(id)}`, { signal });
   return toOpportunity(data);
