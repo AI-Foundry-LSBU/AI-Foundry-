@@ -21,6 +21,8 @@ info:
     screen must use this summary to display estimated-versus-actual comparisons.
     The opportunity history API (US08) records subsequent changes and returns
     a read-only timeline for managers. Its frontend timeline is a separate task.
+    US09 extends the existing in-app notifications with atomic generation and
+    read/unread retrieval. Notifications are not sent by email.
 
     **Sign-in:** provisioned coursework accounts use email and an application
     password. Login creates a PostgreSQL-backed session in the HttpOnly
@@ -61,6 +63,8 @@ tags:
     description: Recording project benefits (US05) and benefits summary data (US07)
   - name: History
     description: Read-only opportunity and linked delivery timeline (US08)
+  - name: Notifications
+    description: In-app updates and read status for the opportunity owner (US09)
 
 security:
   - cookieSession: []
@@ -157,35 +161,67 @@ paths:
           description: Missing or invalid CSRF token. Returns CSRF_INVALID.
   /notifications:
     get:
-      tags: [Opportunities]
-      operationId: listUnreadNotifications
-      summary: List unread in-app notices for the signed-in account
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: List the signed-in account's notifications (US09)
       description: |
-        Saved for the person who submitted an opportunity when a manager or
-        engineer changes the status they see: Under Review, Approved, Rejected,
-        In Progress, Testing or Completed. A note or progress estimate on its
-        own does not create one. No email is sent. The person who made the
-        change is not notified.
+        Only the authenticated recipient's notifications for their own
+        opportunities are returned. User IDs from query parameters never
+        choose a different recipient. Defaults to unread for compatibility
+        with the current bell menu; use status=read or status=all to retain
+        previously read messages. Newest first, with descending ID as a stable
+        tie-breaker. No records are marked read by this GET request.
+
+        Under Review, approval/rejection decisions and delivery changes to In
+        Progress, Testing and Completed generate notifications. Submission,
+        unchanged saves, note/progress/date-only changes and recovered history
+        do not. Automatic project creation at approval does not send a second
+        message. The person who made the change is not notified about their
+        own action. One notification is linked to each relevant history event
+        and committed atomically with that event and its status update.
+        Older stored messages are retained without invented event links.
+        These are stored in-app messages, not email or real-time push delivery.
+      parameters:
+        - name: status
+          in: query
+          description: Single filter value. Repeated or invalid values return 400.
+          schema:
+            type: string
+            enum: [unread, read, all]
+            default: unread
       responses:
         '200':
-          description: Unread notices, newest first.
+          description: Matching notices and the total unread count for this account, from one database snapshot.
           content:
             application/json:
               schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Notification'
+                $ref: '#/components/schemas/NotificationList'
+              example:
+                items:
+                  - id: 82b90c34-5405-4a95-b69c-fd9520248430
+                    opportunityId: 7f6c00a8-b782-4bd5-8d1a-5fdad6b2cb2e
+                    kind: under_review
+                    message: Your opportunity “Automate booking emails” is now Under Review.
+                    createdAt: '2026-11-22T10:00:00Z'
+                    isRead: false
+                    readAt: null
+                unreadCount: 1
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorised'
   /notifications/{id}/read:
     post:
-      tags: [Opportunities]
+      tags: [Notifications]
       operationId: markNotificationRead
-      summary: Mark one of your notices as read
+      summary: Mark one of your notifications as read (US09)
+      description: |
+        Uses the authenticated recipient and checks opportunity ownership.
+        No request body is required; the server supplies readAt. Repeating
+        the action preserves the first read timestamp and still returns 204.
+        Reading never deletes the stored notification. Unknown, malformed
+        and another account's IDs all return 404. No public endpoint creates
+        messages, chooses recipients or resets notifications to unread.
       security:
         - cookieSession: []
           csrfToken: []
@@ -198,7 +234,7 @@ paths:
             format: uuid
       responses:
         '204':
-          description: The notice is hidden on later visits.
+          description: Marked read. It remains available through status=read or status=all and is absent from the default unread view.
         '401':
           $ref: '#/components/responses/Unauthorised'
         '403':
@@ -1146,7 +1182,7 @@ components:
 
     Notification:
       type: object
-      required: [id, opportunityId, kind, message, createdAt]
+      required: [id, opportunityId, kind, message, createdAt, isRead, readAt]
       properties:
         id:
           type: string
@@ -1162,6 +1198,28 @@ components:
         createdAt:
           type: string
           format: date-time
+
+        isRead:
+          type: boolean
+          description: True exactly when readAt is not null.
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: First time this notification was marked read; null while unread.
+
+    NotificationList:
+      type: object
+      required: [items, unreadCount]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Total unread notifications for the authenticated owner, regardless of the chosen status filter.
 
     Opportunity:
       type: object
