@@ -96,15 +96,17 @@ export function projectRoutes(pool) {
     const { id } = req.params;
     if (!uuid.test(id)) return notFound(res);
     if (!req.body || Array.isArray(req.body)) return invalid(res, { body: 'Send a JSON object.' });
-    const { status, progress, note } = req.body;
+    const { status, progress, note, startDate, targetDate } = req.body;
     const fields = {};
-    if (status === undefined && progress === undefined && note === undefined) {
-      fields.body = 'Provide a status, progress estimate or note.';
+    if (status === undefined && progress === undefined && note === undefined && startDate === undefined && targetDate === undefined) {
+      fields.body = 'Provide a status, progress estimate, note or planned dates.';
     }
     if (status !== undefined && !statuses.includes(status)) fields.status = 'Choose a valid delivery status.';
     if (progress !== undefined && (!Number.isInteger(progress) || progress < 0 || progress > 100)) {
       fields.progress = 'Enter a whole number from 0 to 100.';
     }
+    if (startDate !== undefined && !validDate(startDate)) fields.startDate = 'Enter a valid start date.';
+    if (targetDate !== undefined && !validDate(targetDate)) fields.targetDate = 'Enter a valid target date.';
     const text = typeof note === 'string' ? note.trim() : '';
     if (note !== undefined && (!text || text.includes('\0') || [...text].length > 2000)) {
       fields.note = 'Enter a note of 1 to 2000 characters without null characters.';
@@ -112,7 +114,8 @@ export function projectRoutes(pool) {
     if (Object.keys(fields).length) return invalid(res, fields);
 
     const previous = await pool.query(
-      `SELECT p.status, p.opportunity_id, o.status AS opportunity_status
+      `SELECT p.status, p.opportunity_id, p.start_date::text AS start_date, p.target_date::text AS target_date,
+              o.status AS opportunity_status
        FROM projects p
        JOIN opportunities o ON o.id = p.opportunity_id
        WHERE p.id = $1`,
@@ -120,6 +123,17 @@ export function projectRoutes(pool) {
     );
     const before = previous.rows[0];
     if (!before) return notFound(res);
+    const nextStart = startDate ?? before.start_date;
+    const nextTarget = targetDate ?? before.target_date;
+    if (nextStart && nextTarget && nextTarget < nextStart) {
+      return invalid(res, { targetDate: 'Choose a target date on or after the start date.' });
+    }
+    if ((startDate !== undefined || targetDate !== undefined) && req.user.role !== 'manager') {
+      return res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only a manager can set the planned dates.'
+      });
+    }
     const decided = ['approved', 'rejected', 'in_progress', 'completed'].includes(before.opportunity_status);
     if (req.user.role === 'manager' && decided && status !== undefined && status !== before.status) {
       return res.status(403).json({
@@ -149,7 +163,9 @@ export function projectRoutes(pool) {
         message: 'A completed project stays completed.'
       });
     }
-    const updated = await updateProject(pool, id, req.user.id, { status, progress, note: text || undefined });
+    const updated = await updateProject(pool, id, req.user.id, {
+      status, progress, note: text || undefined, startDate, targetDate
+    });
     if (updated && status && status !== before.status) {
       const from = visibleStatus(before.opportunity_status, before.status);
       const to = visibleStatus(before.opportunity_status, status);

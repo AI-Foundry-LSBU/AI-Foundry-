@@ -81,6 +81,7 @@ export async function findOpportunity(pool, id) {
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
             to_jsonb(d) AS decision, decider.name AS decider_name,
             p.id AS project_id, p.status AS delivery_status,
+            p.start_date::text AS project_start_date, p.target_date::text AS project_target_date,
             assignee.id AS assignee_id, assignee.name AS assignee_name,
             r.recommendation AS review_recommendation, r.summary AS review_summary,
             r.reason AS review_reason, r.similar_title AS review_similar_title,
@@ -216,6 +217,7 @@ export async function saveDecision(pool, id, managerId, { decision, reason }) {
      )
      SELECT o.*, submitter.name AS submitter_name,
             p.id AS project_id, p.status AS delivery_status,
+            p.start_date::text AS project_start_date, p.target_date::text AS project_target_date,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
             to_jsonb(d) AS decision, decider.name AS decider_name
      FROM updated o

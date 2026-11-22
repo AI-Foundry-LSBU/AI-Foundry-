@@ -3319,3 +3319,38 @@ button.project-progress {
   color: #5c6078;
   font-size: 12px;
 }
+
+.saving-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.saving-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 170px) minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.saving-row span,
+.saving-row strong {
+  color: #1c1f3a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.saving-row div {
+  height: 14px;
+  overflow: hidden;
+  background: #ece8f8;
+  border-radius: 99px;
+}
+
+.saving-row i {
+  display: block;
+  height: 100%;
+  background: #1c1f3a;
+  border-radius: 99px;
+}

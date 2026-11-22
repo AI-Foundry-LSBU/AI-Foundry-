@@ -8,7 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, getOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
 import { claimDeliveryProject, createDeliveryProject, deliveryStatuses, engineerDeliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
 import { BenefitCharts } from "../components/BenefitCharts";
@@ -23,7 +23,6 @@ import {
 } from "../components/ui";
 
 function BenefitReview({ review }) {
-  const worth = review?.recommendation === "worth_pursuing";
   const title = review?.recommendation === "not_worth_it" ? "Not worth pursuing" : review ? "Worth pursuing" : "Benefit review";
   return <Card className="benefit-review">
     <div className="card-header">
@@ -36,7 +35,7 @@ function BenefitReview({ review }) {
       <p className="benefit-summary">{review?.summary ?? "A benefit review has not been prepared for this opportunity."}</p>
       {review?.reason && <p>{review.reason}</p>}
       {review?.similarTitle && <p className="benefit-covered">Already covered by: {review.similarTitle}</p>}
-      {worth && <BenefitCharts benefits={review.benefits} />}
+      {review && <BenefitCharts review={review} />}
     </div>
   </Card>;
 }
@@ -151,7 +150,8 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const engineerCanChangeProgress = isEngineer && assignedToMe;
   const assignmentLabel = assignedToMe ? "Assigned to you" : opportunity.assignee ? `Assigned to ${opportunity.assignee.name}` : "Not assigned";
   const project = isLive ? undefined : projects.find((item) => item.opportunityId === opportunity.id);
-  const projectId = isLive ? initialOpportunity.projectId : project?.id;
+  const projectId = isLive ? opportunity.projectId : project?.id;
+  const plannedDates = Boolean(opportunity.projectStartDate || opportunity.projectTargetDate);
   const isRestricted = isEngineer && opportunity.status !== "Approved";
   if (isRestricted)
     return <EmptyState
@@ -284,8 +284,29 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
       setPipelineError("");
       setCreatingProject(true);
       try {
-        const created = await createDeliveryProject(currentUser.email, opportunity.id, projectForm);
-        navigate(`/projects/${created.id}`);
+        const dates = {
+          ...(projectForm.startDate ? { startDate: projectForm.startDate } : {}),
+          ...(projectForm.targetDate ? { targetDate: projectForm.targetDate } : {}),
+        };
+        let id = projectId;
+        let alreadyCreated = Boolean(projectId);
+        if (!id) {
+          try {
+            const created = await createDeliveryProject(currentUser.email, opportunity.id, projectForm);
+            id = created.id;
+          } catch (error) {
+            if (error.status !== 409) throw error;
+            const current = await getOpportunity(currentUser.email, opportunity.id);
+            id = current.projectId;
+            if (!id) throw error;
+            alreadyCreated = true;
+            setSavedOpportunity(current);
+          }
+        }
+        if (alreadyCreated && Object.keys(dates).length) {
+          await updateDeliveryProject(currentUser.email, id, dates);
+        }
+        navigate(`/projects/${id}`);
       } catch (error) {
         setPipelineError(error.fields?.startDate ?? error.fields?.targetDate ?? error.message);
       } finally {
@@ -402,6 +423,44 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
           {statusError && !pendingStatus && <p role="alert" className="error-text">{statusError}</p>}
         </div>}
       </Card>}
+      <Card>
+        <div className="card-header">
+          <div>
+            <h2>Opportunity information</h2>
+            <p>Information provided with the original submission</p>
+          </div>
+        </div>
+        <div className="meta-grid">
+          <div>
+            <span>Department</span>
+            <strong>{opportunity.department}</strong>
+          </div>
+          <div>
+            <span>Category</span>
+            <strong>{opportunity.category}</strong>
+          </div>
+          <div>
+            <span>Submitted by</span>
+            <strong>{opportunity.submittedBy}</strong>
+          </div>
+          <div>
+            <span>Submission date</span>
+            <strong>{opportunity.submittedDate}</strong>
+          </div>
+        </div>
+        <div className="narrative">
+          <span>Problem Description</span>
+          <p>{opportunity.problem}</p>
+        </div>
+        <div className="narrative">
+          <span>Suggested Improvement</span>
+          <p>{opportunity.improvement}</p>
+        </div>
+        {opportunity.expectedBenefits && <div className="narrative">
+            <span>Expected Benefits</span>
+            <p>{opportunity.expectedBenefits}</p>
+          </div>}
+      </Card>
       {isLive && isManager && <BenefitReview review={opportunity.benefitReview} />}
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
@@ -430,44 +489,6 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               </div>)}
             </div>}
           </Card>}
-          <Card>
-            <div className="card-header">
-              <div>
-                <h2>Opportunity information</h2>
-                <p>Information provided with the original submission</p>
-              </div>
-            </div>
-            <div className="meta-grid">
-              <div>
-                <span>Department</span>
-                <strong>{opportunity.department}</strong>
-              </div>
-              <div>
-                <span>Category</span>
-                <strong>{opportunity.category}</strong>
-              </div>
-              <div>
-                <span>Submitted by</span>
-                <strong>{opportunity.submittedBy}</strong>
-              </div>
-              <div>
-                <span>Submission date</span>
-                <strong>{opportunity.submittedDate}</strong>
-              </div>
-            </div>
-            <div className="narrative">
-              <span>Problem Description</span>
-              <p>{opportunity.problem}</p>
-            </div>
-            <div className="narrative">
-              <span>Suggested Improvement</span>
-              <p>{opportunity.improvement}</p>
-            </div>
-            {opportunity.expectedBenefits && <div className="narrative">
-                <span>Expected Benefits</span>
-                <p>{opportunity.expectedBenefits}</p>
-              </div>}
-          </Card>
           {(opportunity.decisionStatus || opportunity.decisionReason) && <Card>
               <div className="card-header">
                 <div>
@@ -631,18 +652,20 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               </Button>}
               </>}
             </div>
-            {opportunity.status === "Approved" && !projectId && <div className="pipeline-action">
+            {opportunity.status === "Approved" && !plannedDates && <div className="pipeline-action">
                 <div>
-                  <strong>Ready for delivery</strong>
+                  <strong>{projectId ? "Add planned dates" : "Ready for delivery"}</strong>
                   <span>
-                    Create a linked project and add planned dates if available.
+                    {projectId
+                      ? "The project is already in Not Started. Add a start and target date if you have them."
+                      : "Create a linked project and add planned dates if available."}
                   </span>
                 </div>
                 <Button onClick={() => {
                   setPipelineError("");
                   setPipelineOpen(true);
                 }}>
-                  Move to Project Delivery
+                  {projectId ? "Add planned dates" : "Move to Project Delivery"}
                 </Button>
               </div>}
             {projectId && <div className="pipeline-action complete">
@@ -752,8 +775,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               <span>{opportunity.id}</span>
               <strong>{opportunity.title}</strong>
               <p>
-                A linked project will be created in the {isLive ? "Not Started" : "Approved"} column.
-                The original assessment and opportunity record will be preserved.
+                {projectId
+                  ? "These dates are saved on the project that was created when the opportunity was approved."
+                  : `A linked project will be created in the ${isLive ? "Not Started" : "Approved"} column. The original assessment and opportunity record will be preserved.`}
               </p>
             </div>
             <div className="modal-grid">
@@ -778,7 +802,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   />
               </Field>
             </div>
-            {pipelineError && <p role="alert">{pipelineError}</p>}
+            {pipelineError && <p role="alert" className="error-text">{pipelineError}</p>}
             <div className="modal-actions">
               <Button
     type="button"
@@ -788,7 +812,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   >
                 Cancel
               </Button>
-              <Button type="submit" disabled={creatingProject}>{creatingProject ? "Creating…" : "Create Project"}</Button>
+              <Button type="submit" disabled={creatingProject}>
+                {creatingProject ? "Saving…" : projectId ? "Save dates" : "Create Project"}
+              </Button>
             </div>
           </form>
         </Modal>}

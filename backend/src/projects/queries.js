@@ -59,7 +59,7 @@ export async function createProject(pool, userId, { opportunityId, startDate, ta
   return rows[0]?.id;
 }
 
-export async function updateProject(pool, id, authorId, { status, progress, note }) {
+export async function updateProject(pool, id, authorId, { status, progress, note, startDate, targetDate }) {
   // The status, note and history are atomic. Unchanged statuses add no event.
   const { rowCount } = await pool.query(
     `WITH previous AS (
@@ -71,6 +71,8 @@ export async function updateProject(pool, id, authorId, { status, progress, note
              WHEN COALESCE($2, p.status) = 'completed' THEN 100
              ELSE COALESCE($3, p.progress)
            END,
+           start_date = COALESCE($6::date, p.start_date),
+           target_date = COALESCE($7::date, p.target_date),
            updated_at = clock_timestamp()
        FROM previous WHERE p.id = previous.id
        RETURNING p.id, p.opportunity_id, p.status, previous.status AS previous_status
@@ -87,7 +89,7 @@ export async function updateProject(pool, id, authorId, { status, progress, note
        RETURNING id
      )
      SELECT id FROM updated`,
-    [id, status, progress, authorId, note]
+    [id, status, progress, authorId, note, startDate, targetDate]
   );
   return rowCount === 1;
 }

@@ -31,7 +31,7 @@ function PotentialBenefits() {
   const reviews = usePotentialBenefits();
   if (reviews.loading) return <div role="status"><EmptyState title="Loading potential benefits…" /></div>;
   if (reviews.error) return <div role="alert"><EmptyState title="Could not load potential benefits" text={reviews.error.message} action={<Button onClick={reviews.retry}>Try again</Button>} /></div>;
-  const worth = reviews.reviews.filter((item) => item.recommendation === "worth_pursuing" && (item.benefits ?? []).some((benefit) => benefit.current != null && benefit.proposed != null));
+  const worth = reviews.reviews;
   const charted = reviews.benefits.filter((item) => item.estimated != null);
   const max = Math.max(...charted.map((item) => item.estimated), 1);
   return <>
@@ -53,7 +53,7 @@ function PotentialBenefits() {
         </div>
         <Button variant="secondary" onClick={() => navigate(`/opportunities/${review.opportunityId}`)}>Open opportunity</Button>
       </div>
-      <BenefitCharts benefits={review.benefits} />
+      <BenefitCharts review={review} />
     </Card>)}
     {charted.length > 0 && <Card>
       <div className="card-header">
@@ -70,7 +70,7 @@ function PotentialBenefits() {
         </div>)}
       </div>
     </Card>}
-    {!worth.length && <EmptyState title="No potential benefits yet" text="A comparison appears when an opportunity is worth pursuing." />}
+    {!worth.length && <EmptyState title="No potential benefits yet" text="A comparison appears when an opportunity has a benefit review." />}
   </>;
 }
 

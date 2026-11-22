@@ -464,6 +464,11 @@ test('US04 creates one project from an approved opportunity and shares delivery 
   assert.equal((await request(server, `${projects}/bad-id`, { email: team })).status, 404);
 
   const patch = (email, body) => request(server, path, { email, method: 'PATCH', body });
+  assert.equal((await patch(team, { startDate: '2026-11-12', targetDate: '2026-12-01' })).status, 403);
+  const dated = await patch(manager, { startDate: '2026-11-12', targetDate: '2026-12-01' });
+  assert.equal(dated.status, 200);
+  assert.equal(dated.body.startDate, '2026-11-12');
+  assert.equal(dated.body.targetDate, '2026-12-01');
   assert.equal((await patch(staff, { status: 'testing' })).status, 403);
   for (const invalid of [{}, { status: 'approved' }, { progress: 101 }, { note: '   ' }]) {
     assert.equal((await patch(team, invalid)).status, 400);

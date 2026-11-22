@@ -53,6 +53,8 @@ function opportunityResponse(row, submitterName) {
     submittedBy: { id: row.submitted_by, name: submitterName },
     submittedAt: row.submitted_at,
     projectId: row.project_id ?? undefined,
+    projectStartDate: row.project_start_date ?? undefined,
+    projectTargetDate: row.project_target_date ?? undefined,
     assignee: row.assignee_id ? { id: row.assignee_id, name: row.assignee_name } : undefined,
     benefitReview: row.review_recommendation ? {
       recommendation: row.review_recommendation,
