@@ -13,8 +13,9 @@ import {
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
-import { useBenefits } from "../data/useBenefits";
+import { progressForDeliveryStatus } from "../data/projectsApi";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
+import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -26,12 +27,6 @@ import {
   TableAction,
   formatCurrency
 } from "../components/ui";
-function hoursSaved(records) {
-  return records.filter((item) => item.unit === "Hours/month").reduce((sum, item) => sum + item.actual, 0);
-}
-function annualSavings(records) {
-  return records.filter((item) => item.unit === "GBP/year").reduce((sum, item) => sum + item.actual, 0);
-}
 const portfolioStatuses = [
   "Submitted",
   "Under Review",
@@ -43,12 +38,11 @@ const portfolioStatuses = [
 ];
 
 function useRecordedBenefits() {
-  const recorded = useBenefits();
-  const records = recorded.data ?? [];
+  const recorded = usePotentialBenefits();
   return {
     ...recorded,
-    hours: recorded.loading || recorded.error ? null : hoursSaved(records),
-    savings: recorded.loading || recorded.error ? null : annualSavings(records)
+    hours: recorded.loading || recorded.error ? null : recorded.hours,
+    savings: recorded.loading || recorded.error ? null : recorded.savings
   };
 }
 
@@ -185,7 +179,7 @@ function ManagerDashboard() {
           <div className="card-header">
             <div>
               <h2>Project progress overview</h2>
-              <p>Manual delivery estimate for each project</p>
+              <p>Progress follows the delivery stage</p>
             </div>
             <button
     className="text-button"
@@ -200,7 +194,7 @@ function ManagerDashboard() {
           </div>}
           <div className="project-overview">
             {projects.filter((project) => project.status !== "Completed").slice(0, 3).map((project) => {
-    const progress = project.progress;
+    const progress = progressForDeliveryStatus(project.status);
     return <button
       type="button"
       className="project-progress"
@@ -224,8 +218,8 @@ function ManagerDashboard() {
         <Card className="benefit-summary">
           <div className="card-header">
             <div>
-              <h2>Benefits summary</h2>
-              <p>Validated and forecast impact</p>
+              <h2>Potential benefits</h2>
+              <p>Estimates from opportunity descriptions, not measured results</p>
             </div>
           </div>
           {recorded.loading && <p role="status">Loading benefits…</p>}
@@ -233,20 +227,23 @@ function ManagerDashboard() {
             <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
           </div>}
           {!recorded.loading && !recorded.error && <>
-            <div className="benefit-highlight">
+            {recorded.hours > 0 && <div className="benefit-highlight">
               <Clock3 size={20} />
               <div>
                 <strong>{recorded.hours} hours/month</strong>
-                <span>actual time saved</span>
+                <span>potential time saved</span>
               </div>
-            </div>
-            <div className="benefit-highlight">
+            </div>}
+            {recorded.savings > 0 && <div className="benefit-highlight">
               <CircleDollarSign size={20} />
               <div>
                 <strong>{formatCurrency(recorded.savings)}/year</strong>
-                <span>actual financial savings</span>
+                <span>potential financial savings</span>
               </div>
-            </div>
+            </div>}
+            {recorded.hours === 0 && recorded.savings === 0 && <p className="benefit-note">
+              {recorded.reviews.filter((item) => item.recommendation === "worth_pursuing").length} worth pursuing. Hours and savings appear when an opportunity states them.
+            </p>}
           </>}
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
             View benefits
@@ -257,6 +254,7 @@ function ManagerDashboard() {
 }
 
 function EngineerDashboard() {
+  const { currentUser } = useApp();
   const navigate = useNavigate();
   const delivery = useDeliveryProjects();
   const recorded = useRecordedBenefits();
@@ -264,12 +262,14 @@ function EngineerDashboard() {
   if (delivery.error) return <div role="alert">
     <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
   </div>;
-  const projects = delivery.data;
+  const projects = delivery.isLive
+    ? delivery.data.filter((project) => project.assignee?.id === currentUser.id)
+    : delivery.data;
   const countStatus = (status) => projects.filter((item) => item.status === status).length;
   return <>
       <PageHeader
     title="Delivery Dashboard"
-    subtitle="Follow approved projects from planning through to completion."
+    subtitle="Projects you have assigned to yourself."
     actions={<Button onClick={() => navigate("/pipeline")}>
             Open Project Delivery <ArrowRight size={16} />
           </Button>}
@@ -306,7 +306,7 @@ function EngineerDashboard() {
           <div className="card-header">
             <div>
               <h2>Project Delivery</h2>
-              <p>Approved projects and their target dates</p>
+              <p>Your assigned projects</p>
             </div>
             <button
     className="text-button"
@@ -327,6 +327,9 @@ function EngineerDashboard() {
                 </tr>
               </thead>
               <tbody>
+                {projects.filter((project) => project.status !== "Completed").length === 0 && <tr>
+                  <td colSpan={5}>No active projects. Completed projects are in History.</td>
+                </tr>}
                 {projects.filter((project) => project.status !== "Completed").map((project) => <tr
     key={project.id}
     onClick={() => navigate(`/projects/${project.id}`)}
@@ -349,12 +352,13 @@ function EngineerDashboard() {
               </tbody>
             </table>
           </div>
+          {countStatus("Completed") > 0 && <p className="benefit-note">Completed projects are in History.</p>}
         </Card>
         <Card className="benefit-summary">
           <div className="card-header">
             <div>
-              <h2>Benefits recorded</h2>
-              <p>Measures linked to project delivery</p>
+              <h2>Potential benefits</h2>
+              <p>Estimates from opportunity descriptions, not measured results</p>
             </div>
           </div>
           {recorded.loading && <p role="status">Loading benefits…</p>}
@@ -362,20 +366,23 @@ function EngineerDashboard() {
             <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
           </div>}
           {!recorded.loading && !recorded.error && <>
-            <div className="benefit-highlight">
+            {recorded.hours > 0 && <div className="benefit-highlight">
               <Clock3 size={20} />
               <div>
                 <strong>{recorded.hours} hours/month</strong>
-                <span>actual time saved</span>
+                <span>potential time saved</span>
               </div>
-            </div>
-            <div className="benefit-highlight">
+            </div>}
+            {recorded.savings > 0 && <div className="benefit-highlight">
               <BarChart3 size={20} />
               <div>
                 <strong>{formatCurrency(recorded.savings)}/year</strong>
-                <span>actual financial savings</span>
+                <span>potential financial savings</span>
               </div>
-            </div>
+            </div>}
+            {recorded.hours === 0 && recorded.savings === 0 && <p className="benefit-note">
+              {recorded.reviews.filter((item) => item.recommendation === "worth_pursuing").length} worth pursuing. Hours and savings appear when an opportunity states them.
+            </p>}
           </>}
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
             View benefits

@@ -1,14 +1,19 @@
 const projectFields = `
   p.id, p.opportunity_id, p.status, p.progress, p.created_at, p.updated_at,
   p.start_date::text AS start_date, p.target_date::text AS target_date,
+  p.assigned_to AS assignee_id, assignee.name AS assignee_name,
   o.title, o.department, o.priority, o.proposed_improvement AS description
+`;
+const projectFrom = `
+  FROM projects p
+  JOIN opportunities o ON o.id = p.opportunity_id
+  LEFT JOIN users assignee ON assignee.id = p.assigned_to
 `;
 
 export async function listProjects(pool) {
   const { rows } = await pool.query(
     `SELECT ${projectFields}
-     FROM projects p
-     JOIN opportunities o ON o.id = p.opportunity_id
+     ${projectFrom}
      ORDER BY p.created_at DESC, p.id DESC`
   );
   return rows;
@@ -24,8 +29,7 @@ export async function findProject(pool, id) {
        JOIN users u ON u.id = n.author_id
        WHERE n.project_id = p.id
      ), '[]'::jsonb) AS notes
-     FROM projects p
-     JOIN opportunities o ON o.id = p.opportunity_id
+     ${projectFrom}
      WHERE p.id = $1`,
     [id]
   );
@@ -86,4 +90,17 @@ export async function updateProject(pool, id, authorId, { status, progress, note
     [id, status, progress, authorId, note]
   );
   return rowCount === 1;
+}
+
+export async function claimProject(pool, id, userId) {
+  const { rows } = await pool.query(
+    `UPDATE projects
+     SET assigned_to = $2, updated_at = clock_timestamp()
+     WHERE id = $1 AND (assigned_to IS NULL OR assigned_to = $2)
+     RETURNING id`,
+    [id, userId]
+  );
+  if (rows[0]) return 'claimed';
+  const existing = await pool.query('SELECT id FROM projects WHERE id = $1', [id]);
+  return existing.rows[0] ? 'taken' : 'missing';
 }

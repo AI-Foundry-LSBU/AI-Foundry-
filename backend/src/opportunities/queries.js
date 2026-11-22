@@ -1,3 +1,5 @@
+import { lsbuContextVersion } from '../benefits/university.js';
+
 export async function insertOpportunity(pool, userId, data) {
   const { rows } = await pool.query(
     `WITH created AS (
@@ -39,10 +41,12 @@ export async function findOpportunities(pool, { userId, engineerId, status, cate
   const { rows } = await pool.query(
     `WITH matching AS (
        SELECT o.id, o.title, o.department, o.status, o.priority, o.category, o.submitted_at,
-              o.submitted_by, submitter.name AS submitter_name, p.status AS delivery_status
+              o.submitted_by, submitter.name AS submitter_name, p.id AS project_id,
+              p.status AS delivery_status, assignee.id AS assignee_id, assignee.name AS assignee_name
        FROM opportunities o
        JOIN users submitter ON submitter.id = o.submitted_by
        LEFT JOIN projects p ON p.opportunity_id = o.id
+       LEFT JOIN users assignee ON assignee.id = p.assigned_to
        WHERE ($1::uuid IS NULL OR o.submitted_by = $1)
          AND ($2::text IS NULL OR o.status = $2)
          AND ($3::text IS NULL OR o.category = $3)
@@ -76,7 +80,12 @@ export async function findOpportunity(pool, id) {
     `SELECT o.*, submitter.name AS submitter_name,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
             to_jsonb(d) AS decision, decider.name AS decider_name,
-            p.id AS project_id, p.status AS delivery_status
+            p.id AS project_id, p.status AS delivery_status,
+            assignee.id AS assignee_id, assignee.name AS assignee_name,
+            r.recommendation AS review_recommendation, r.summary AS review_summary,
+            r.reason AS review_reason, r.similar_title AS review_similar_title,
+            r.potential_benefits AS review_benefits, r.assessment AS review_assessment,
+            r.context_version AS review_context_version
      FROM opportunities o
      JOIN users submitter ON submitter.id = o.submitted_by
      LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id
@@ -84,6 +93,8 @@ export async function findOpportunity(pool, id) {
      LEFT JOIN opportunity_decisions d ON d.opportunity_id = o.id
      LEFT JOIN users decider ON decider.id = d.decided_by
      LEFT JOIN projects p ON p.opportunity_id = o.id
+     LEFT JOIN users assignee ON assignee.id = p.assigned_to
+     LEFT JOIN opportunity_benefit_reviews r ON r.opportunity_id = o.id
      WHERE o.id = $1`,
     [id]
   );
@@ -186,9 +197,25 @@ export async function saveDecision(pool, id, managerId, { decision, reason }) {
        FROM updated o JOIN previous ON previous.id = o.id
        JOIN saved d ON d.opportunity_id = o.id
        JOIN users u ON u.id = d.decided_by
-       RETURNING id
+       RETURNING opportunity_id
+     ), project_created AS (
+       INSERT INTO projects (opportunity_id, created_by)
+       SELECT o.id, $2 FROM updated o
+       WHERE $3 = 'approved'
+       ON CONFLICT (opportunity_id) DO NOTHING
+       RETURNING opportunity_id, status, created_at
+     ), delivery_logged AS (
+       INSERT INTO opportunity_history (
+         opportunity_id, event_type, to_status, actor_id, actor_name, occurred_at
+       )
+       SELECT p.opportunity_id, 'delivery_started', p.status, u.id, u.name, p.created_at
+       FROM project_created p
+       JOIN logged l ON l.opportunity_id = p.opportunity_id
+       JOIN users u ON u.id = $2
+       RETURNING opportunity_id
      )
      SELECT o.*, submitter.name AS submitter_name,
+            p.id AS project_id, p.status AS delivery_status,
             to_jsonb(a) AS assessment, assessor.name AS assessor_name,
             to_jsonb(d) AS decision, decider.name AS decider_name
      FROM updated o
@@ -196,9 +223,68 @@ export async function saveDecision(pool, id, managerId, { decision, reason }) {
      JOIN users submitter ON submitter.id = o.submitted_by
      JOIN users decider ON decider.id = d.decided_by
      LEFT JOIN opportunity_assessments a ON a.opportunity_id = o.id
-     LEFT JOIN users assessor ON assessor.id = a.assessed_by`,
+     LEFT JOIN users assessor ON assessor.id = a.assessed_by
+     LEFT JOIN projects p ON p.opportunity_id = o.id
+     LEFT JOIN delivery_logged dl ON dl.opportunity_id = o.id`,
     [id, managerId, decision, reason]
   );
 
   return rows[0];
+}
+
+export async function benefitReviewContext(pool, opportunityId) {
+  const opportunities = await pool.query(
+    `SELECT title FROM opportunities WHERE id <> $1 ORDER BY submitted_at DESC LIMIT 12`,
+    [opportunityId]
+  );
+  const benefits = await pool.query(
+    `SELECT description FROM project_benefits ORDER BY recorded_on DESC, id DESC LIMIT 12`
+  );
+  return {
+    existingOpportunityTitles: opportunities.rows.map((row) => row.title),
+    existingBenefitDescriptions: benefits.rows.map((row) => row.description)
+  };
+}
+
+export async function saveBenefitReview(pool, opportunityId, review) {
+  await pool.query(
+    `INSERT INTO opportunity_benefit_reviews
+       (opportunity_id, recommendation, summary, reason, similar_title, potential_benefits, assessment, context_version)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
+     ON CONFLICT (opportunity_id) DO UPDATE
+     SET recommendation = EXCLUDED.recommendation,
+         summary = EXCLUDED.summary,
+         reason = EXCLUDED.reason,
+         similar_title = EXCLUDED.similar_title,
+         potential_benefits = EXCLUDED.potential_benefits,
+         assessment = COALESCE(opportunity_benefit_reviews.assessment, EXCLUDED.assessment),
+         context_version = EXCLUDED.context_version
+     WHERE opportunity_benefit_reviews.context_version < EXCLUDED.context_version`,
+    [
+      opportunityId, review.recommendation, review.summary, review.reason, review.similarTitle,
+      JSON.stringify(review.benefits ?? []),
+      review.assessment ? JSON.stringify(review.assessment) : null,
+      lsbuContextVersion
+    ]
+  );
+}
+
+export async function saveReviewAssessment(pool, opportunityId, assessment) {
+  await pool.query(
+    `UPDATE opportunity_benefit_reviews
+     SET assessment = $2::jsonb
+     WHERE opportunity_id = $1 AND assessment IS NULL`,
+    [opportunityId, JSON.stringify(assessment)]
+  );
+}
+
+export async function listBenefitReviews(pool) {
+  const { rows } = await pool.query(
+    `SELECT o.id, o.title, o.department, r.recommendation, r.summary, r.reason,
+            r.similar_title, r.potential_benefits
+     FROM opportunity_benefit_reviews r
+     JOIN opportunities o ON o.id = r.opportunity_id
+     ORDER BY r.created_at DESC, o.id DESC`
+  );
+  return rows;
 }

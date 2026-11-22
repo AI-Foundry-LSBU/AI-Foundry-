@@ -7,7 +7,6 @@ import {
   LogOut,
   Menu,
   Network,
-  PanelLeftClose,
   PlusCircle,
   X
 } from "lucide-react";
@@ -103,7 +102,6 @@ function Layout() {
             </NavLink>)}
         </nav>
         <div className="sidebar-footer rail-footer">
-          <PanelLeftClose size={17} />
           <span>LSBU</span>
         </div>
       </aside>

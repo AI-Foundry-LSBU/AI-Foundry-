@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
 import { departments, opportunityStatuses } from "../data/options";
+import { claimDeliveryProject } from "../data/projectsApi";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -23,6 +24,8 @@ export function OpportunitiesPage() {
   const [status, setStatus] = useState("All");
   const [department, setDepartment] = useState("All");
   const [priority, setPriority] = useState("All");
+  const [assigning, setAssigning] = useState("");
+  const [assignError, setAssignError] = useState("");
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
   const useLiveList = isStaff || role === currentUser.role;
@@ -71,7 +74,7 @@ export function OpportunitiesPage() {
             {isStaff ? "My Opportunities" : isEngineer ? "Approved Opportunities" : "All Opportunities"}
           </h1>
           <p>
-            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Approved opportunities and the context behind project delivery." : "Review, prioritise and progress opportunities from across LSBU."}
+            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Assign an approved opportunity to yourself. It then appears in Project Delivery." : "Review, prioritise and progress opportunities from across LSBU."}
           </p>
         </div>
         <div className="masthead-ledger">
@@ -148,18 +151,24 @@ export function OpportunitiesPage() {
           </div>}
       </section>
 
-      {filtered.length ? <section className="opportunity-worklist">
+      {assignError && <p role="alert">{assignError}</p>}
+      {filtered.length ? <section className={`opportunity-worklist${isEngineer ? " engineer-worklist" : ""}`}>
           <div className="worklist-heading">
             <span>Status</span>
             <span>Opportunity</span>
             <span>{isStaff ? "Submitted" : "Owner"}</span>
             <span>Priority</span>
-            <span />
+            <span>{isEngineer ? "Assignment" : ""}</span>
           </div>
-          {filtered.map((item) => <button
+          {filtered.map((item) => <div
     className="opportunity-row"
     key={item.id}
+    role="link"
+    tabIndex={0}
     onClick={() => navigate(`/opportunities/${item.id}`)}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") navigate(`/opportunities/${item.id}`);
+    }}
   >
               <span className="row-status">
                 <StatusBadge status={getOpportunityDisplayStatus(item)} />
@@ -178,8 +187,29 @@ export function OpportunitiesPage() {
                 <small>{isStaff ? item.department : item.submittedDate}</small>
               </span>
               <PriorityBadge priority={item.priority} />
-              <TableAction children="Open" />
-            </button>)}
+              {isEngineer ? <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                {item.assignee?.id === currentUser.id
+                  ? <strong>Assigned to you</strong>
+                  : item.assignee
+                    ? <span>Assigned to {item.assignee.name}</span>
+                    : <Button
+                      disabled={!item.projectId || assigning === item.id}
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        setAssignError("");
+                        setAssigning(item.id);
+                        try {
+                          await claimDeliveryProject(currentUser.email, item.projectId);
+                          live.retry();
+                        } catch (error) {
+                          setAssignError(error.message);
+                        } finally {
+                          setAssigning("");
+                        }
+                      }}
+                    >{assigning === item.id ? "Assigning…" : "Assign to me"}</Button>}
+              </span> : <TableAction children="Open" />}
+            </div>)}
         </section> : <div className="worklist-empty">
           <EmptyState
     title={useLiveList && !scoped.length ? (isEngineer ? "No approved opportunities yet" : "No opportunities yet") : "No opportunities in this view"}

@@ -10,7 +10,8 @@ import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
 import { deleteOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
-import { createDeliveryProject, deliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
+import { claimDeliveryProject, createDeliveryProject, deliveryStatuses, engineerDeliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
+import { BenefitCharts } from "../components/BenefitCharts";
 import {
   Button,
   Card,
@@ -20,6 +21,25 @@ import {
   PriorityBadge,
   StatusBadge
 } from "../components/ui";
+
+function BenefitReview({ review }) {
+  const worth = review?.recommendation === "worth_pursuing";
+  const title = review?.recommendation === "not_worth_it" ? "Not worth pursuing" : review ? "Worth pursuing" : "Benefit review";
+  return <Card className="benefit-review">
+    <div className="card-header">
+      <div>
+        <p className="benefit-kicker">Suggestion for London South Bank University</p>
+        <h2>{title}</h2>
+      </div>
+    </div>
+    <div className="benefit-review-body">
+      <p className="benefit-summary">{review?.summary ?? "A benefit review has not been prepared for this opportunity."}</p>
+      {review?.reason && <p>{review.reason}</p>}
+      {review?.similarTitle && <p className="benefit-covered">Already covered by: {review.similarTitle}</p>}
+      {worth && <BenefitCharts benefits={review.benefits} />}
+    </div>
+  </Card>;
+}
 
 const assessmentFields = {
   "Strategic alignment": "strategicAlignment",
@@ -105,6 +125,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   const [pendingStatus, setPendingStatus] = useState(null);
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [claimedByMe, setClaimedByMe] = useState(false);
   const [projectForm, setProjectForm] = useState({
     startDate: "",
     targetDate: ""
@@ -121,8 +142,14 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     return () => controller.abort();
   }, [isLive, role, currentUser.email, initialOpportunity.id, historyAttempt]);
   const isManager = role === "Digital Project Manager";
-  const canDecide = !isLive || opportunity.status === "Under Review";
   const isEngineer = role === "AI Foundry Engineer";
+  const assignedToMe = claimedByMe || opportunity.assignee?.id === currentUser.id;
+  const canDecide = !isLive || opportunity.status === "Under Review";
+  const decisionMade = opportunity.status === "Approved" || opportunity.status === "Rejected";
+  const assessmentLocked = isLive && opportunity.status === "Approved";
+  const managerCanChangeProgress = isManager && !decisionMade;
+  const engineerCanChangeProgress = isEngineer && assignedToMe;
+  const assignmentLabel = assignedToMe ? "Assigned to you" : opportunity.assignee ? `Assigned to ${opportunity.assignee.name}` : "Not assigned";
   const project = isLive ? undefined : projects.find((item) => item.opportunityId === opportunity.id);
   const projectId = isLive ? initialOpportunity.projectId : project?.id;
   const isRestricted = isEngineer && opportunity.status !== "Approved";
@@ -317,7 +344,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
           <div>
             <h2>Opportunity progress</h2>
             <p>
-              {rejected ? "This opportunity was not progressed following assessment." : "Track this opportunity through review, decision and delivery."}
+              {rejected ? "This opportunity was rejected." : "Submitted, reviewed, then delivered."}
             </p>
           </div>
         </div>
@@ -337,12 +364,26 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
         <div className="card-header">
           <div>
             <h2>Delivery status</h2>
-            <p>{completedDelivery ? "A completed project stays completed." : "Selecting a new status asks you to confirm."}</p>
+            <p>{assignmentLabel}</p>
           </div>
           <StatusBadge status={deliveryStatus} />
         </div>
-        <div className="delivery-status-update">
-          <Field label="Status">
+        {isEngineer && !assignedToMe && <div className="delivery-status-update">
+          {opportunity.assignee
+            ? <p>{opportunity.assignee.name} is working on this project.</p>
+            : <Button onClick={async () => {
+              setStatusError("");
+              try {
+                await claimDeliveryProject(currentUser.email, projectId);
+                setClaimedByMe(true);
+              } catch (error) {
+                setStatusError(error.message);
+              }
+            }}>Assign to me</Button>}
+          {statusError && <p role="alert" className="error-text">{statusError}</p>}
+        </div>}
+        {(managerCanChangeProgress || engineerCanChangeProgress) && <div className="delivery-status-update">
+          <Field label="Status" helper={engineerCanChangeProgress ? "Move the project from In Progress to Completed." : "You can change progress until you approve or reject."}>
             <select
               aria-label={`Delivery status for ${opportunity.title}`}
               value={deliveryStatus}
@@ -355,12 +396,13 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
                 }
               }}
             >
-              {deliveryStatuses.map((item) => <option key={item}>{item}</option>)}
+              {(engineerCanChangeProgress ? engineerDeliveryStatuses(deliveryStatus) : deliveryStatuses).map((item) => <option key={item}>{item}</option>)}
             </select>
           </Field>
           {statusError && !pendingStatus && <p role="alert" className="error-text">{statusError}</p>}
-        </div>
+        </div>}
       </Card>}
+      {isLive && isManager && <BenefitReview review={opportunity.benefitReview} />}
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
           {isLive && isManager && <Card>
@@ -471,12 +513,16 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
               </div>
             </Card>}
         </div>
-        {isManager && <Card className="assessment-card">
+        {isManager && <Card className={`assessment-card${isLive && opportunity.assessment ? " assessment-prepared" : ""}`}>
             <div className="card-header">
               <div>
                 <h2>Opportunity Assessment</h2>
                 <p>
-                  Rate each criterion independently, then set a manual priority.
+                  {assessmentLocked
+                    ? "This assessment stays as it was when the opportunity was approved."
+                    : isLive && opportunity.assessment
+                      ? "Prepared automatically. Change any score, then save."
+                      : "Rate each criterion independently, then set a manual priority."}
                 </p>
               </div>
             </div>
@@ -497,7 +543,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     }))}
     aria-label={`${criterion}: ${rating} out of 5`}
     aria-pressed={value === rating}
-    disabled={saving}
+    disabled={saving || assessmentLocked}
   >
                           {rating}
                         </button>)}
@@ -514,26 +560,20 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
   />}
                 </div>)}
             </div>
-            <Field
-    label="Category"
-    helper="Set during triage; staff do not categorise submissions."
-  >
+            <Field label="Category">
               <select
     value={category}
-    disabled={saving}
+    disabled={saving || assessmentLocked}
     onChange={(event) => setCategory(event.target.value)}
   >
                 <option value="">Select category</option>
                 {categories.map((item) => <option key={item}>{item}</option>)}
               </select>
             </Field>
-            <Field
-    label="Manual priority"
-    helper="Criteria are not automatically weighted or combined."
-  >
+            <Field label="Priority">
               <select
     value={priority}
-    disabled={saving}
+    disabled={saving || assessmentLocked}
     onChange={(event) => setPriority(event.target.value)}
   >
                 <option value="Not set">Select priority</option>
@@ -542,9 +582,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
                 <option>Low</option>
               </select>
             </Field>
-            {isLive ? <Field label="Assessment notes" helper="Optional.">
-              <textarea rows={4} value={notes} maxLength={2000} disabled={saving} onChange={(event) => setNotes(event.target.value)} />
-            </Field> : null}
+            {isLive && <Field label="Assessment notes" helper="Optional.">
+              <textarea rows={4} value={notes} maxLength={2000} disabled={saving || assessmentLocked} onChange={(event) => setNotes(event.target.value)} />
+            </Field>}
             {canDecide && <Field
     label="Decision reason"
     helper={isLive ? "Required for rejection. Staff can read the saved reason." : "Record the rationale or feedback that staff should see."}
@@ -563,14 +603,11 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     placeholder="Explain the decision, key considerations and any next steps..."
   />
             </Field>}
-            <div className="assessment-note">
-              Ratings are recorded individually. Set the priority manually.
-            </div>
             {saveError && !pendingDecision && <div role="alert" className="assessment-note">{saveError}</div>}
             <div className="assessment-actions">
-              <Button variant="secondary" onClick={save} disabled={saving}>
+              {!assessmentLocked && <Button variant="secondary" onClick={save} disabled={saving}>
                 {saving ? "Saving…" : "Save Assessment"}
-              </Button>
+              </Button>}
               {canDecide && <>
               <Button
     onClick={() => openDecision("Approved")}

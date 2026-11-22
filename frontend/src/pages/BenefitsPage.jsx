@@ -7,9 +7,12 @@ import {
   Filter,
   Plus
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { BenefitCharts } from "../components/BenefitCharts";
 import { useApp } from "../context/AppContext";
 import { saveBenefit } from "../data/benefitsApi";
 import { useBenefits } from "../data/useBenefits";
+import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import {
   Button,
@@ -22,6 +25,54 @@ import {
   formatCurrency,
   formatMeasure
 } from "../components/ui";
+
+function PotentialBenefits() {
+  const navigate = useNavigate();
+  const reviews = usePotentialBenefits();
+  if (reviews.loading) return <div role="status"><EmptyState title="Loading potential benefits…" /></div>;
+  if (reviews.error) return <div role="alert"><EmptyState title="Could not load potential benefits" text={reviews.error.message} action={<Button onClick={reviews.retry}>Try again</Button>} /></div>;
+  const worth = reviews.reviews.filter((item) => item.recommendation === "worth_pursuing" && (item.benefits ?? []).some((benefit) => benefit.current != null && benefit.proposed != null));
+  const charted = reviews.benefits.filter((item) => item.estimated != null);
+  const max = Math.max(...charted.map((item) => item.estimated), 1);
+  return <>
+    <PageHeader
+      title="Potential benefits"
+      subtitle="Estimates taken from each opportunity. These are not measured results."
+    />
+    <div className="stats-grid three">
+      <StatCard label="Worth pursuing" value={reviews.reviews.filter((item) => item.recommendation === "worth_pursuing").length} icon={CheckCircle2} tone="green" />
+      <StatCard label="Benefit measures" value={reviews.benefits.length} detail="Compared on each opportunity" icon={BriefcaseBusiness} tone="violet" />
+      {reviews.hours > 0 && <StatCard label="Potential hours" value={`${reviews.hours} hours/month`} icon={Clock3} tone="blue" />}
+      {reviews.savings > 0 && <StatCard label="Potential savings" value={`${formatCurrency(reviews.savings)}/year`} icon={CircleDollarSign} tone="blue" />}
+    </div>
+    {worth.map((review) => <Card key={review.opportunityId}>
+      <div className="card-header">
+        <div>
+          <h2>{review.title}</h2>
+          <p>{review.department}</p>
+        </div>
+        <Button variant="secondary" onClick={() => navigate(`/opportunities/${review.opportunityId}`)}>Open opportunity</Button>
+      </div>
+      <BenefitCharts benefits={review.benefits} />
+    </Card>)}
+    {charted.length > 0 && <Card>
+      <div className="card-header">
+        <div>
+          <h2>Estimated quantities</h2>
+          <p>Only numbers stated in the opportunity are included</p>
+        </div>
+      </div>
+      <div className="bar-chart">
+        {charted.map((item) => <div className="bar-row" key={`${item.category}-${item.description}`}>
+          <span>{item.description}</span>
+          <div><i style={{ width: `${Math.max(item.estimated / max * 100, 8)}%` }} /></div>
+          <strong>{item.estimated} {item.unit}</strong>
+        </div>)}
+      </div>
+    </Card>}
+    {!worth.length && <EmptyState title="No potential benefits yet" text="A comparison appears when an opportunity is worth pursuing." />}
+  </>;
+}
 
 export function BenefitsPage() {
   const { role, currentUser, addBenefit, updateBenefit } = useApp();
@@ -52,6 +103,7 @@ export function BenefitsPage() {
       title="Access restricted"
       text="Benefits Reporting is available to the AI Foundry team."
     />;
+  if (records.isLive) return <PotentialBenefits />;
   if (records.loading || delivery.loading) return <div role="status">
     <EmptyState title="Loading benefits…" />
   </div>;

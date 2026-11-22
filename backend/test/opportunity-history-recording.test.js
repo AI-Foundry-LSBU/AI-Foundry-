@@ -98,7 +98,7 @@ test('US08 preserves an approval reason and snapshots the responsible user name'
 
 test('US08 records linked delivery transitions, not unchanged status, progress-only or note-only saves', async () => {
   const id = await approved();
-  const projectId = await createProject(pool, users.manager, { opportunityId: id });
+  const projectId = (await pool.query('SELECT id FROM projects WHERE opportunity_id = $1', [id])).rows[0].id;
   assert.equal(await createProject(pool, users.manager, { opportunityId: id }), undefined);
   await updateProject(pool, projectId, users.team, { note: 'Started investigating.' });
   await updateProject(pool, projectId, users.team, { progress: 10 });
@@ -160,13 +160,14 @@ test('US08 a history insertion failure rolls back each write and its related dat
     },
     async () => {
       const id = await approved();
+      await pool.query('DELETE FROM projects WHERE opportunity_id = $1', [id]);
       return { write: () => createProject(pool, users.manager, { opportunityId: id }), check: async () => {
         assert.equal((await pool.query('SELECT count(*)::integer AS count FROM projects')).rows[0].count, 0);
       } };
     },
     async () => {
       const id = await approved();
-      const projectId = await createProject(pool, users.manager, { opportunityId: id });
+      const projectId = (await pool.query('SELECT id FROM projects WHERE opportunity_id = $1', [id])).rows[0].id;
       return { write: () => updateProject(pool, projectId, users.team, { status: 'testing', note: 'Must roll back.' }), check: async () => {
         assert.equal((await pool.query('SELECT status FROM projects WHERE id = $1', [projectId])).rows[0].status, 'not_started');
         assert.equal((await pool.query('SELECT count(*)::integer AS count FROM project_progress_notes')).rows[0].count, 0);

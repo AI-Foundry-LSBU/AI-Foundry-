@@ -5,8 +5,10 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { deliveryStatuses } from "../data/projectsApi";
+import { benefitGain } from "../components/BenefitCharts";
+import { deliveryStatuses, progressForDeliveryStatus } from "../data/projectsApi";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
+import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { projectStatuses } from "../data/options";
 import {
   Button,
@@ -19,10 +21,18 @@ import {
 } from "../components/ui";
 
 export function PipelinePage() {
-  const { role, updateProject } = useApp();
+  const { role, currentUser, updateProject } = useApp();
   const navigate = useNavigate();
   const [view, setView] = useState("kanban");
   const delivery = useDeliveryProjects();
+  const potential = usePotentialBenefits();
+  const benefitSummary = (project) => {
+    const review = potential.reviews.find((item) => item.opportunityId === project.opportunityId && item.recommendation === "worth_pursuing");
+    const gains = (review?.benefits ?? []).map(benefitGain).filter((gain) => gain != null);
+    if (!gains.length) return "";
+    const best = Math.max(...gains);
+    return `${gains.length} potential benefit${gains.length === 1 ? "" : "s"}${best ? ` · up to ${best} point${best === 1 ? "" : "s"} less effort` : ""}`;
+  };
   if (role === "Staff")
     return <EmptyState
       title="Access restricted"
@@ -35,12 +45,17 @@ export function PipelinePage() {
   if (delivery.error) return <div role="alert">
     <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
   </div>;
-  const projects = delivery.data.filter((project) => project.status !== "Completed");
+  const owned = delivery.isLive && role === "AI Foundry Engineer"
+    ? delivery.data.filter((project) => project.assignee?.id === currentUser.id)
+    : delivery.data;
+  const projects = owned.filter((project) => project.status !== "Completed");
   const statuses = (delivery.isLive ? deliveryStatuses : projectStatuses).filter((status) => status !== "Completed");
   return <>
       <PageHeader
     title="Project Delivery"
-    subtitle="Track approved projects until they are completed. Completed projects stay in History."
+    subtitle={role === "AI Foundry Engineer"
+      ? "Projects you have assigned to yourself. Completed projects stay in History."
+      : "Track approved projects until they are completed. Completed projects stay in History."}
     actions={<div className="view-toggle">
             <button
       className={view === "kanban" ? "active" : ""}
@@ -57,11 +72,17 @@ export function PipelinePage() {
           </div>}
   />
       {projects.length === 0 ? <EmptyState
-        title={delivery.data.length ? "Completed projects are in History" : "No delivery projects yet"}
-        text={delivery.data.length
+        title={owned.length ? "Completed projects are in History" : role === "AI Foundry Engineer" ? "No projects assigned to you" : "No delivery projects yet"}
+        text={owned.length
           ? "A completed project stays in History and its status cannot be changed."
-          : "A Digital Project Manager can move an approved opportunity to Project Delivery."}
-        action={delivery.data.length ? <Button onClick={() => navigate("/history")}>History</Button> : undefined}
+          : role === "AI Foundry Engineer"
+            ? "Open Approved Opportunities and assign one to yourself."
+            : "A Digital Project Manager can move an approved opportunity to Project Delivery."}
+        action={owned.length
+          ? <Button onClick={() => navigate("/history")}>History</Button>
+          : role === "AI Foundry Engineer"
+            ? <Button onClick={() => navigate("/opportunities")}>Approved Opportunities</Button>
+            : undefined}
       /> : view === "kanban" ? <div className="kanban">
           {statuses.map((status) => <div className="kanban-column" key={status}>
               <div className="kanban-title">
@@ -84,11 +105,12 @@ export function PipelinePage() {
                         <span className="mono">{project.id}</span>
                         <h3>{project.title}</h3>
                         <p>{project.department}</p>
+                        {benefitSummary(project) && <p className="project-benefit-line">{benefitSummary(project)}</p>}
                         <div className="card-progress">
                           <div>
-                            <i style={{ width: `${project.progress}%` }} />
+                            <i style={{ width: `${progressForDeliveryStatus(project.status)}%` }} />
                           </div>
-                          <span>Manual estimate {project.progress}%</span>
+                          <span>{progressForDeliveryStatus(project.status)}%</span>
                         </div>
                         <div className="project-card-meta">
                           <PriorityBadge priority={project.priority} />
@@ -119,7 +141,7 @@ export function PipelinePage() {
                   <th>Priority</th>
                   <th>Status</th>
                   <th>Target date</th>
-                  <th>Manual estimate</th>
+                  <th>Progress</th>
                   <th />
                 </tr>
               </thead>
@@ -132,6 +154,7 @@ export function PipelinePage() {
                       <div className="title-cell">
                         <strong>{project.title}</strong>
                         <span>{project.id}</span>
+                        {benefitSummary(project) && <span className="project-benefit-line">{benefitSummary(project)}</span>}
                       </div>
                     </td>
                     <td>{project.department}</td>
@@ -143,7 +166,7 @@ export function PipelinePage() {
                     </td>
                     <td>{project.targetDate}</td>
                     <td>
-                      <strong>{project.progress}%</strong>
+                      <strong>{progressForDeliveryStatus(project.status)}%</strong>
                     </td>
                     <td>
                       <TableAction />

@@ -116,6 +116,10 @@ export async function deleteOpportunity(email, id) {
   await request(email, `/opportunities/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+export function suggestOpportunityBenefit(email, id) {
+  return request(email, `/opportunities/${encodeURIComponent(id)}/benefit-suggestion`, { method: "POST" });
+}
+
 export function submitOpportunity(email, data) {
   return request(email, "/opportunities", {
     method: "POST",

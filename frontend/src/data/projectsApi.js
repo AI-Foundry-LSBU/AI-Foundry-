@@ -10,6 +10,17 @@ export const deliveryStatusLabels = {
 
 export const deliveryStatuses = Object.values(deliveryStatusLabels);
 
+export function engineerDeliveryStatuses(current) {
+  const forward = ["In Progress", "Testing", "Completed"];
+  return current === "Not Started" ? ["Not Started", ...forward] : forward;
+}
+
+export function progressForDeliveryStatus(status) {
+  const index = deliveryStatuses.indexOf(status);
+  if (index < 0) return 0;
+  return Math.round((index / (deliveryStatuses.length - 1)) * 100);
+}
+
 function displayDate(value) {
   return value ? new Date(value).toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
@@ -47,6 +58,10 @@ export function createDeliveryProject(email, opportunityId, { startDate, targetD
   return saveProject(email, "/projects", "POST", {
     opportunityId, startDate: startDate || undefined, targetDate: targetDate || undefined,
   });
+}
+
+export function claimDeliveryProject(email, id) {
+  return saveProject(email, `/projects/${encodeURIComponent(id)}/assignment`, "POST", {});
 }
 
 export function updateDeliveryProject(email, id, { status, ...changes }) {

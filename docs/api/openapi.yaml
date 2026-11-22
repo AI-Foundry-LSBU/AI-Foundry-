@@ -508,6 +508,59 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /opportunities/{id}/benefit-suggestion:
+    parameters:
+      - $ref: '#/components/parameters/OpportunityId'
+    post:
+      security:
+        - cookieSession: []
+          csrfToken: []
+      tags: [Benefits]
+      operationId: suggestOpportunityBenefit
+      summary: Suggest one benefit from an opportunity description
+      description: |
+        Manager only. Reads the opportunity text and returns one draft benefit.
+        Nothing is saved. A manager can review the draft and record it through
+        the existing benefit endpoint once the opportunity has a delivery project.
+        `estimated` is null when the description does not support a number.
+      responses:
+        '200':
+          description: A draft benefit. It has not been recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenefitSuggestion'
+              example:
+                category: efficiency
+                description: Staff would spend less time confirming room bookings.
+                measurement: Hours saved confirming bookings
+                unit: Hours/month
+                estimated: 4
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: The suggestion service returned an unusable result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: SUGGESTION_FAILED
+                message: The benefit suggestion could not be created.
+        '503':
+          description: Benefit suggestions are not configured on the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: SUGGESTION_UNAVAILABLE
+                message: Benefit suggestions are not configured.
+
   /opportunities/{id}/decision:
     parameters:
       - $ref: '#/components/parameters/OpportunityId'
@@ -1350,6 +1403,31 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    BenefitSuggestion:
+      type: object
+      required: [category, description, measurement, unit, estimated]
+      properties:
+        category:
+          $ref: '#/components/schemas/BenefitCategory'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        measurement:
+          type: string
+          minLength: 1
+          maxLength: 200
+        unit:
+          type: string
+          enum: [Hours/month, GBP/year, Percent, Days, Cases/month]
+        estimated:
+          type: number
+          nullable: true
+          minimum: -999999999.9999
+          maximum: 999999999.9999
+          multipleOf: 0.0001
+          description: Null when the opportunity text does not support a quantity.
 
     BenefitInput:
       type: object

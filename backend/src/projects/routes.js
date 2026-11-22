@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
 import { notifyStatusChange, visibleStatus } from '../notifications/queries.js';
-import { createProject, findProject, listProjects, updateProject } from './queries.js';
+import { claimProject, createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const statuses = ['not_started', 'in_progress', 'testing', 'completed'];
@@ -20,7 +20,8 @@ function projectResponse(row) {
     targetDate: row.target_date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    notes: row.notes
+    notes: row.notes,
+    assignee: row.assignee_id ? { id: row.assignee_id, name: row.assignee_name } : null
   };
 }
 
@@ -77,6 +78,20 @@ export function projectRoutes(pool) {
     return project ? res.json(projectResponse(project)) : notFound(res);
   });
 
+  router.post('/projects/:id/assignment', requireRole('team'), async (req, res) => {
+    const { id } = req.params;
+    if (!uuid.test(id)) return notFound(res);
+    const result = await claimProject(pool, id, req.user.id);
+    if (result === 'missing') return notFound(res);
+    if (result === 'taken') {
+      return res.status(409).json({
+        code: 'ASSIGNED',
+        message: 'Another engineer is already assigned to this project.'
+      });
+    }
+    return res.json(projectResponse(await findProject(pool, id)));
+  });
+
   router.patch('/projects/:id', delivery, json, async (req, res) => {
     const { id } = req.params;
     if (!uuid.test(id)) return notFound(res);
@@ -105,6 +120,29 @@ export function projectRoutes(pool) {
     );
     const before = previous.rows[0];
     if (!before) return notFound(res);
+    const decided = ['approved', 'rejected', 'in_progress', 'completed'].includes(before.opportunity_status);
+    if (req.user.role === 'manager' && decided && status !== undefined && status !== before.status) {
+      return res.status(403).json({
+        code: 'DECIDED',
+        message: 'After a decision, engineers update progress from In Progress to Completed.'
+      });
+    }
+    if (req.user.role === 'team') {
+      const owner = await pool.query('SELECT assigned_to FROM projects WHERE id = $1', [id]);
+      if (owner.rows[0]?.assigned_to && owner.rows[0].assigned_to !== req.user.id) {
+        return res.status(403).json({
+          code: 'ASSIGNED',
+          message: 'This project is assigned to another engineer.'
+        });
+      }
+      if (status !== undefined && status !== before.status && !['in_progress', 'testing', 'completed'].includes(status)) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'Check the project fields.',
+          fields: { status: 'Choose In Progress, Testing or Completed.' }
+        });
+      }
+    }
     if (before.status === 'completed' && status !== undefined && status !== 'completed') {
       return res.status(409).json({
         code: 'COMPLETED',

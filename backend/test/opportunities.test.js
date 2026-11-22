@@ -281,7 +281,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql', '011_approved_projects.sql', '012_assignment_and_estimates.sql', '013_automatic_assessment.sql', '014_university_context.sql'
   ]);
 });
 
@@ -442,19 +442,21 @@ test('US04 creates one project from an approved opportunity and shares delivery 
   assert.equal((await request(server, `${opportunityPath}/decision`, {
     email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
   })).status, 200);
-  assert.deepEqual((await request(server, projects, { email: team })).body, []);
+  const listed = await request(server, projects, { email: team });
+  assert.equal(listed.body.length, 1);
+  assert.equal(listed.body[0].status, 'not_started');
+  assert.equal((await create(manager)).status, 409);
 
-  const created = await create(manager);
-  assert.equal(created.status, 201);
-  const path = created.headers.get('location');
+  const path = `/api/v1/projects/${listed.body[0].id}`;
+  const created = await request(server, path, { email: team });
+  assert.equal(created.status, 200);
   assert.equal(created.body.status, 'not_started');
   assert.equal(created.body.progress, 0);
   assert.equal(created.body.description, submission.proposedImprovement);
   assert.equal(created.body.priority, 'high');
-  assert.equal(created.body.startDate, input.startDate);
-  assert.equal(created.body.targetDate, input.targetDate);
+  assert.equal(created.body.startDate, null);
+  assert.equal(created.body.targetDate, null);
   assert.deepEqual(created.body.notes, []);
-  assert.equal((await create(manager)).status, 409);
   assert.equal((await request(server, projects, { email: team })).body[0].id, created.body.id);
   assert.equal((await request(server, opportunityPath, { email: manager })).body.projectId, created.body.id);
   assert.equal((await request(server, path, { email: staff })).status, 403);
@@ -663,11 +665,10 @@ test('US06 manager responses support combined filters, pagination and delivery d
   assert.equal((await request(server, `${path}/${records[1].id}/decision`, {
     email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
   })).status, 200);
-  const project = await request(server, '/api/v1/projects', {
-    email: manager, body: { opportunityId: records[1].id }
-  });
-  assert.equal(project.status, 201);
-  assert.equal((await request(server, project.headers.get('location'), {
+  const project = (await request(server, '/api/v1/projects', { email: manager })).body
+    .find((item) => item.opportunityId === records[1].id);
+  assert.equal(project.status, 'not_started');
+  assert.equal((await request(server, `/api/v1/projects/${project.id}`, {
     email: team, method: 'PATCH', body: { status: 'testing' }
   })).status, 200);
   const delivery = await list('?status=approved&department=Finance&priority=low');
@@ -698,16 +699,16 @@ test('the submitter is notified when a manager or engineer changes the status', 
   assert.equal((await request(server, '/api/v1/notifications', { email: otherStaff })).body.items.length, 0);
   assert.equal((await request(server, '/api/v1/notifications', { email: manager })).body.items.length, 0);
 
-  const project = await request(server, '/api/v1/projects', { email: manager, body: { opportunityId: id } });
-  assert.equal(project.status, 201);
-  const projectPath = project.headers.get('location');
+  const project = (await request(server, '/api/v1/projects', { email: manager })).body[0];
+  const projectPath = `/api/v1/projects/${project.id}`;
   assert.equal((await notices()).body.items[0].kind, 'approved');
   assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'in_progress' } })).status, 200);
   assert.equal((await notices()).body.items[0].kind, 'in_progress');
   assert.match((await notices()).body.items[0].message, /now In Progress/);
   assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { note: 'Still in progress.' } })).status, 200);
   assert.equal((await notices()).body.items.filter((item) => item.kind === 'in_progress').length, 1);
-  assert.equal((await request(server, projectPath, { email: manager, method: 'PATCH', body: { status: 'testing' } })).status, 200);
+  assert.equal((await request(server, projectPath, { email: manager, method: 'PATCH', body: { status: 'testing' } })).status, 403);
+  assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'testing' } })).status, 200);
   assert.equal((await notices()).body.items[0].kind, 'testing');
   assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'completed' } })).status, 200);
   const unread = await notices();
@@ -731,8 +732,8 @@ test('a completed project stays completed', async (t) => {
   assert.equal((await request(server, `/api/v1/opportunities/${id}/decision`, {
     email: manager, body: { decision: 'approved', reason: 'Ready for delivery.' }
   })).status, 200);
-  const project = await request(server, '/api/v1/projects', { email: manager, body: { opportunityId: id } });
-  const projectPath = project.headers.get('location');
+  const project = (await request(server, '/api/v1/projects', { email: manager })).body[0];
+  const projectPath = `/api/v1/projects/${project.id}`;
   assert.equal((await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'completed' } })).status, 200);
 
   const locked = await request(server, projectPath, { email: team, method: 'PATCH', body: { status: 'in_progress' } });

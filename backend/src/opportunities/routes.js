@@ -1,15 +1,17 @@
 import express from 'express';
-import { assessOpportunity, createOpportunity, decideOpportunity, getOpportunity, getOpportunityHistory, listAllOpportunities, listMyOpportunities, removeOpportunity } from './handlers.js';
+import { assessOpportunity, createOpportunity, decideOpportunity, getOpportunity, getOpportunityHistory, listAllOpportunities, listMyOpportunities, listReviews, removeOpportunity, suggestOpportunityBenefit } from './handlers.js';
 
-export function opportunityRoutes(pool) {
+export function opportunityRoutes(pool, options = {}) {
   const router = express.Router();
-  router.post('/opportunities', express.json({ limit: '64kb' }), createOpportunity(pool));
+  router.post('/opportunities', express.json({ limit: '64kb' }), createOpportunity(pool, options));
   router.get('/opportunities', listAllOpportunities(pool));
   router.put('/opportunities/:id/assessment', express.json({ limit: '64kb' }), assessOpportunity(pool));
   router.post('/opportunities/:id/decision', express.json({ limit: '64kb' }), decideOpportunity(pool));
+  router.post('/opportunities/:id/benefit-suggestion', suggestOpportunityBenefit(pool, options));
   router.get('/me/opportunities', listMyOpportunities(pool));
+  router.get('/benefit-reviews', listReviews(pool));
   router.get('/opportunities/:id/history', getOpportunityHistory(pool));
-  router.get('/opportunities/:id', getOpportunity(pool));
+  router.get('/opportunities/:id', getOpportunity(pool, options));
   router.delete('/opportunities/:id', removeOpportunity(pool));
   return router;
 }

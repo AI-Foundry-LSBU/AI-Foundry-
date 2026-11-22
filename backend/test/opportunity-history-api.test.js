@@ -100,10 +100,12 @@ test('US08 returns a persistent chronological timeline for only the selected opp
   assert.equal(result.body.opportunityId, opportunity.id);
   assert.deepEqual(result.body.items.map((item) => [item.eventType, item.fromStatus, item.toStatus]), [
     ['submitted', null, 'submitted'], ['status_changed', 'submitted', 'in_assessment'],
-    ['decision_recorded', 'in_assessment', 'approved']
+    ['decision_recorded', 'in_assessment', 'approved'],
+    ['delivery_started', null, 'not_started']
   ]);
   assert.ok(result.body.items.every((item) => typeof item.id === 'string' && /^\d+$/.test(item.id)));
-  assert.ok(result.body.items.every((item) => item.statusType === 'opportunity' && item.source === 'live'));
+  assert.ok(result.body.items.slice(0, 3).every((item) => item.statusType === 'opportunity' && item.source === 'live'));
+  assert.equal(result.body.items[3].statusType, 'delivery');
   assert.equal(result.body.items[2].reason, 'Saves administration time.');
   assert.equal(result.body.items[2].actor.id, decision.body.decision.decidedBy.id);
   assert.equal(result.body.items[2].occurredAt, new Date(decision.body.decision.decidedAt).toISOString());
@@ -135,9 +137,9 @@ test('US08 exposes delivery events with the engineer as actor, separately from a
   const opportunity = await submit(server);
   await review(server, opportunity.id);
   await request(server, `/api/v1/opportunities/${opportunity.id}/decision`, { email: manager, body: { decision: 'approved' } });
-  const project = await request(server, '/api/v1/projects', { email: manager, body: { opportunityId: opportunity.id } });
-  assert.equal(project.status, 201);
-  assert.equal((await request(server, `/api/v1/projects/${project.body.id}`, {
+  const project = (await request(server, '/api/v1/projects', { email: manager })).body[0];
+  assert.equal(project.status, 'not_started');
+  assert.equal((await request(server, `/api/v1/projects/${project.id}`, {
     email: engineer, method: 'PATCH', body: { status: 'testing', note: 'Ready for testing.' }
   })).status, 200);
   const entries = (await getHistory(server, opportunity.id)).body.items;
