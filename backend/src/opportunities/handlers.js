@@ -1,5 +1,4 @@
 import { requestBenefitSuggestion } from '../benefits/suggest.js';
-import { notifySubmitter } from '../notifications/queries.js';
 import { normaliseAssessment } from '../benefits/review.js';
 import { lsbuContextVersion } from '../benefits/university.js';
 import { benefitReviewContext, deleteOpportunity, findOpportunities, findOpportunity, findOpportunityHistory, insertOpportunity, listBenefitReviews, saveAssessment, saveBenefitReview, saveDecision, saveReviewAssessment } from './queries.js';
@@ -128,9 +127,6 @@ async function attachBenefitReview(pool, row, reviewBenefit, actor) {
   if (!assessment) return current;
 
   const saved = await saveAssessment(pool, current.id, actor.id, assessment);
-  if (saved?.previous_status === 'submitted' && saved.status === 'in_assessment') {
-    await notifySubmitter(pool, { opportunityId: current.id, actorId: actor.id, kind: 'under_review' });
-  }
   return saved ? await findOpportunity(pool, current.id) : current;
 }
 
@@ -236,9 +232,6 @@ export function assessOpportunity(pool) {
     if (!row) {
       return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
     }
-    if (row.previous_status === 'submitted' && row.status === 'in_assessment') {
-      await notifySubmitter(pool, { opportunityId: row.id, actorId: req.user.id, kind: 'under_review' });
-    }
     return res.json(opportunityResponse(row, row.submitter_name));
   };
 }
@@ -277,7 +270,6 @@ export function decideOpportunity(pool) {
     const { id } = req.params;
     const row = uuidPattern.test(id) ? await saveDecision(pool, id, req.user.id, data) : undefined;
     if (row) {
-      await notifySubmitter(pool, { opportunityId: row.id, actorId: req.user.id, kind: data.decision });
       return res.json(opportunityResponse(row, row.submitter_name));
     }
 
