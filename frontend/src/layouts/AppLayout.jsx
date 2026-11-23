@@ -102,7 +102,7 @@ function Layout() {
             </NavLink>)}
         </nav>
         <div className="sidebar-footer rail-footer">
-          <span>LSBU</span>
+          <span>Opportunity Tracker</span>
         </div>
       </aside>
       {mobileOpen && <div className="sidebar-scrim" onClick={() => setMobileOpen(false)} />}

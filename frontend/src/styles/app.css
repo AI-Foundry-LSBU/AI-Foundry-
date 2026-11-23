@@ -2182,6 +2182,22 @@ button.project-progress {
   letter-spacing: .06em;
 }
 
+.list-foot {
+  margin: 0;
+  padding: 12px 16px 2px;
+  color: #6d7290;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.opportunity-worklist .list-foot,
+.worklist-empty .list-foot,
+.table-card .list-foot,
+.card .list-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+
 .opportunity-masthead {
   display: flex;
   flex-wrap: wrap;

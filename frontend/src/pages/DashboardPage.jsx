@@ -67,6 +67,9 @@ function ManagerDashboard() {
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
   const projects = delivery.data ?? [];
   const activeProjects = projects.filter((item) => item.status !== "Completed");
+  const openSubmissions = opportunities.filter((item) => getOpportunityDisplayStatus(item) !== "Completed");
+  const recentSubmissions = openSubmissions.slice(0, 5);
+  const moreSubmissions = openSubmissions.length - recentSubmissions.length;
   return <>
       <PageHeader
     title="Management Dashboard"
@@ -131,7 +134,7 @@ function ManagerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {opportunities.filter((item) => getOpportunityDisplayStatus(item) !== "Completed").slice(0, 5).map((item) => <tr
+                {recentSubmissions.map((item) => <tr
     key={item.id}
     onClick={() => navigate(`/opportunities/${item.id}`)}
   >
@@ -153,6 +156,9 @@ function ManagerDashboard() {
               </tbody>
             </table>
           </div>
+          {moreSubmissions > 0 && <p className="list-foot">
+              {moreSubmissions} more {moreSubmissions === 1 ? "opportunity is" : "opportunities are"} in All Opportunities.
+            </p>}
         </Card>
         <Card>
           <div className="card-header">

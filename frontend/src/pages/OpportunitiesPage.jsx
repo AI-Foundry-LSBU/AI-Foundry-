@@ -61,6 +61,11 @@ export function OpportunitiesPage() {
     (opportunity) => item === "All" || getOpportunityDisplayStatus(opportunity) === item
   ).length;
   const filtersActive = search !== "" || status !== "All" || department !== "All" || priority !== "All";
+  const listFoot = (scoped.length > 0 || filtersActive) && <p className="list-foot">
+      {filtered.length === scoped.length
+        ? `${scoped.length} ${scoped.length === 1 ? "opportunity" : "opportunities"}`
+        : `Showing ${filtered.length} of ${scoped.length}`}
+    </p>;
   const resetFilters = () => {
     setSearch("");
     setStatus("All");
@@ -108,7 +113,7 @@ export function OpportunitiesPage() {
           <input
     value={search}
     onChange={(event) => setSearch(event.target.value)}
-    placeholder="Search title or opportunity ID"
+    placeholder="Search title, department or ID"
   />
         </label>
         {!isEngineer && <div className="status-tabs" aria-label="Filter by status">
@@ -210,11 +215,13 @@ export function OpportunitiesPage() {
                     >{assigning === item.id ? "Assigning…" : "Assign to me"}</Button>}
               </span> : <TableAction children="Open" />}
             </div>)}
+          {listFoot}
         </section> : <div className="worklist-empty">
           <EmptyState
     title={useLiveList && !scoped.length ? (isEngineer ? "No approved opportunities yet" : "No opportunities yet") : "No opportunities in this view"}
     text={useLiveList && !scoped.length ? (isStaff ? "Submit an opportunity and it will appear here." : isEngineer ? "Opportunities appear here once a manager approves them." : "Submitted opportunities will appear here.") : "Adjust the search or filters to return to the opportunity queue."}
   />
+          {listFoot}
         </div>}
     </div>;
 }

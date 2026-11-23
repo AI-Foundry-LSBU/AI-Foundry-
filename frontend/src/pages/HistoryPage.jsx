@@ -71,6 +71,9 @@ export function HistoryPage() {
           </tbody>
         </table>
       </div>
+      <p className="list-foot">
+        {completed.length} completed {completed.length === 1 ? "project" : "projects"}.
+      </p>
     </Card>}
   </>;
 }
