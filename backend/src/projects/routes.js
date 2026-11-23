@@ -1,6 +1,5 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
-import { notifyStatusChange, visibleStatus } from '../notifications/queries.js';
 import { claimProject, createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -166,16 +165,6 @@ export function projectRoutes(pool) {
     const updated = await updateProject(pool, id, req.user.id, {
       status, progress, note: text || undefined, startDate, targetDate
     });
-    if (updated && status && status !== before.status) {
-      const from = visibleStatus(before.opportunity_status, before.status);
-      const to = visibleStatus(before.opportunity_status, status);
-      await notifyStatusChange(pool, {
-        opportunityId: before.opportunity_id,
-        actorId: req.user.id,
-        from,
-        to
-      });
-    }
     return updated ? res.json(projectResponse(await findProject(pool, id))) : notFound(res);
   });
 

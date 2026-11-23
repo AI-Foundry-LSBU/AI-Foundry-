@@ -1,68 +1,29 @@
-const messages = {
-  under_review: (title) => `Your opportunity “${title}” is now Under Review.`,
-  approved: (title) => `Your opportunity “${title}” was approved.`,
-  rejected: (title) => `Your opportunity “${title}” was rejected.`,
-  delivery_started: (title) => `Your opportunity “${title}” moved to project delivery.`,
-  in_progress: (title) => `Your opportunity “${title}” is now In Progress.`,
-  testing: (title) => `Your opportunity “${title}” is now Testing.`,
-  project_completed: (title) => `Your opportunity “${title}” is now Completed.`
-};
-
-const kindForStatus = {
-  in_assessment: 'under_review',
-  approved: 'approved',
-  rejected: 'rejected',
-  in_progress: 'in_progress',
-  testing: 'testing',
-  completed: 'project_completed'
-};
-
-export function visibleStatus(opportunityStatus, deliveryStatus) {
-  if (opportunityStatus === 'approved' && deliveryStatus && deliveryStatus !== 'not_started') return deliveryStatus;
-  return opportunityStatus;
-}
-
-export async function notifyStatusChange(pool, { opportunityId, actorId, from, to }) {
-  const kind = from !== to ? kindForStatus[to] : undefined;
-  if (!kind) return;
-  const message = to === 'approved' && from !== 'in_assessment'
-    ? (title) => `Your opportunity “${title}” is now Approved.`
-    : undefined;
-  await notifySubmitter(pool, { opportunityId, actorId, kind, message });
-}
-
-export async function notifySubmitter(pool, { opportunityId, actorId, kind, message }) {
+export async function listNotifications(pool, userId, status) {
   const { rows } = await pool.query(
-    'SELECT submitted_by, title FROM opportunities WHERE id = $1',
-    [opportunityId]
+    `WITH own AS (
+       SELECT n.id, n.opportunity_id, n.kind, n.message, n.created_at, n.read_at
+       FROM notifications n JOIN opportunities o ON o.id = n.opportunity_id
+       WHERE n.user_id = $1 AND o.submitted_by = $1
+     ), matching AS (
+       SELECT * FROM own
+       WHERE $2 = 'all' OR ($2 = 'unread' AND read_at IS NULL) OR ($2 = 'read' AND read_at IS NOT NULL)
+     )
+     SELECT counts.unread_count, n.*
+     FROM (SELECT count(*)::integer AS unread_count FROM own WHERE read_at IS NULL) counts
+     LEFT JOIN matching n ON true
+     ORDER BY n.created_at DESC, n.id DESC`,
+    [userId, status]
   );
-  const opportunity = rows[0];
-  const text = opportunity && (message ?? messages[kind])?.(opportunity.title);
-  if (!opportunity || opportunity.submitted_by === actorId || !text) return;
-
-  await pool.query(
-    `INSERT INTO notifications (user_id, opportunity_id, kind, message)
-     VALUES ($1, $2, $3, $4)`,
-    [opportunity.submitted_by, opportunityId, kind, text]
-  );
-}
-
-export async function listUnreadNotifications(pool, userId) {
-  const { rows } = await pool.query(
-    `SELECT id, opportunity_id, kind, message, created_at
-     FROM notifications
-     WHERE user_id = $1 AND read_at IS NULL
-     ORDER BY created_at DESC, id DESC`,
-    [userId]
-  );
-  return rows;
+  return { rows: rows.filter((row) => row.id !== null), unreadCount: rows[0].unread_count };
 }
 
 export async function markNotificationRead(pool, id, userId) {
   const { rowCount } = await pool.query(
-    `UPDATE notifications
-     SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
-     WHERE id = $1 AND user_id = $2`,
+    `UPDATE notifications n
+     SET read_at = COALESCE(n.read_at, clock_timestamp())
+     FROM opportunities o
+     WHERE n.id = $1 AND n.user_id = $2
+       AND o.id = n.opportunity_id AND o.submitted_by = $2`,
     [id, userId]
   );
   return rowCount === 1;

@@ -408,6 +408,107 @@ unsupported history-write requests. Run `npm test` with a local
 `TEST_DATABASE_URL` as described above. Tests use isolated schemas and cascade
 their own cleanup into the history table; application data is not reset.
 
+## Opportunity notifications (US09 backend)
+
+US09 extends the existing `notifications` table and endpoints rather than adding
+a second notification system. Apply its three commits after updating to the
+latest main used for the patches. Stop the API, then run from `backend/`:
+
+```bash
+npm run db:migrate
+npm start
+```
+
+No new dependencies, passwords or environment settings are needed. Do not reset
+the database or edit old migration files. Migration `015_notification_events.sql`
+adds a nullable, unique link to the history event and an index for read/all
+queries. Existing messages, recipients, dates and read states are preserved;
+older messages keep a null event link because it cannot be inferred reliably.
+
+Migration `016_notification_generation.sql` installs a database trigger: a
+function PostgreSQL runs automatically when a live history entry is inserted.
+US08 already writes history with each actual transition. The trigger creates
+one notification for that event inside the same transaction. If notification
+creation fails, the status change, decision, project changes and history all
+roll back together. The former extra notification calls in route handlers have
+been removed, including the automatic assessment path.
+
+Messages go to the opportunity's submitter for Under Review, Approved, Rejected,
+In Progress, Testing and Completed events. Approval creates one decision
+notification even though it also starts a delivery project. Repeated saves of
+the same status, progress/note/date-only changes, initial submission and
+backfilled history do not create notifications. A later genuine transition back
+to a previous stage gets its own event and notice. A person is not notified
+about their own action. These are stored in-app messages, not emails, browser
+push messages or a live subscription; the frontend fetches the current list.
+
+### Notification endpoints
+
+| Request | Result |
+| --- | --- |
+| `GET /api/v1/notifications` | Unread messages, keeping the existing bell compatible. |
+| `GET /api/v1/notifications?status=unread` | Explicit unread view. |
+| `GET /api/v1/notifications?status=read` | Previously read messages. |
+| `GET /api/v1/notifications?status=all` | Both read and unread messages. |
+| `POST /api/v1/notifications/:id/read` | Mark your notification read; returns 204 with no response body. |
+
+All requests require the existing signed-in session. The POST also requires
+the session's CSRF token, which the frontend API helper already sends. No
+request body is required. The API derives the recipient from the session and
+also checks that they own the linked opportunity. Query/body user IDs cannot
+select another person's inbox. Another account's notification ID returns 404,
+as do malformed and missing IDs. Invalid/repeated status filters return 400.
+
+The GET response contains `items` and `unreadCount`. Each item has `id`,
+`opportunityId`, `kind`, `message`, `createdAt`, `isRead` and `readAt`. Items are
+newest first, ordered by creation timestamp and then descending ID for ties.
+`unreadCount` always counts all unread messages for the current owner, even in
+the read/all views. List and count come from one database snapshot. An empty
+inbox returns `{ "items": [], "unreadCount": 0 }`.
+
+GET never marks records read. The POST sets `readAt` on the server and keeps the
+first timestamp if called again. It does not delete the notification: it remains
+available through the read/all views after refreshing or restarting the API.
+There is no public endpoint to create messages, choose recipients or reset
+messages to unread. Existing opportunity deletion still cascades to its notices.
+
+### Frontend integration and local checks
+
+The existing bell already uses these paths and links messages to
+`/opportunities/${opportunityId}`. Its default unread request is unchanged.
+It currently marks displayed messages read when opened. This commit does not
+redesign that component: a persistent read/all view and visible per-message
+read indicators still need frontend integration to complete the full US09
+interface criteria. The API supports them with the status filter, `isRead`,
+`readAt` and `unreadCount`. Retain the existing ownership checks when opening
+the opportunity. Refetch on menu opening or refresh to see new saved messages.
+
+To verify locally:
+
+1. As staff, submit an opportunity. As manager, assess it and record a decision.
+   If approved, use the engineer view to update its project delivery status.
+2. Sign back in as the submitting staff user and inspect the bell. Another staff
+   account should receive none of these messages. Selecting the link should open
+   the submitted opportunity.
+3. On the frontend website, use the developer console to inspect all records:
+
+   ```js
+   fetch('/api/v1/notifications?status=all', { credentials: 'same-origin' })
+     .then(async response => ({ status: response.status, body: await response.json() }))
+     .then(console.log);
+   ```
+
+4. Compare `isRead` and `readAt` before and after opening the current bell. Repeat
+   the request after refreshing; read records should still exist. Change the
+   query to `status=read` or `status=unread` to check the separate views.
+
+`test/notification-schema.test.js` checks upgrading existing data and event
+links. `test/notification-generation.test.js` checks actual/repeated/concurrent
+transitions, ownership, automatic assessment and rollback on notification
+failure. `test/notification-api.test.js` checks authentication, filters, read
+persistence, CSRF, ownership, safe link targets and legacy records. Run `npm test`
+with the local `TEST_DATABASE_URL` described above.
+
 ## Files to share
 
 Keep this README, `.env.example`, `.gitignore`, and `package-lock.json` in Git. Keep the actual `.env` on your computer. The demo users and password are for local testing.
