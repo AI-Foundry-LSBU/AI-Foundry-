@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { departments } from "../data/options";
 import { submitOpportunity } from "../data/opportunitiesApi";
+import { SolutionChat } from "../components/SolutionChat";
 import {
   Button,
   Card,
@@ -29,6 +30,7 @@ export function SubmitPage() {
   const [submittedId, setSubmittedId] = useState("");
   const [submissionError, setSubmissionError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState("chat");
   const update = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     setErrors((current) => {
@@ -103,6 +105,7 @@ export function SubmitPage() {
           expectedBenefits: ""
         });
         setSubmittedId("");
+        setStep("chat");
       }}
     >
               Submit Another Opportunity
@@ -110,12 +113,21 @@ export function SubmitPage() {
           </div>
         </Card>
       </div>;
+  const showForm = step === "form";
   return <>
       <PageHeader
-    title="Submit an Opportunity"
-    subtitle="Tell us about a process or service that could be improved."
+    title={showForm ? "Submit an Opportunity" : "Check existing solutions"}
+    subtitle={showForm
+      ? "Tell us about a process or service that could be improved."
+      : "Check London South Bank University services first. Continue to the form if none of them covers the work."}
+    actions={showForm ? <Button type="button" variant="secondary" onClick={() => setStep("chat")}>
+      Back to solution check
+    </Button> : null}
   />
-      <form onSubmit={submit} noValidate>
+      <div hidden={showForm}>
+        <SolutionChat onContinue={() => setStep("form")} />
+      </div>
+      <form onSubmit={submit} noValidate hidden={!showForm}>
         <Card className="form-card">
           <div className="form-intro">
             <div>

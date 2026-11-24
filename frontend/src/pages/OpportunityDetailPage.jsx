@@ -324,7 +324,7 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
       setMessage(`${created.id} created in the Approved column.`);
     }
   };
-  return <>
+  return <div className="opportunity-detail">
       <button className="back-link" onClick={() => navigate("/opportunities")}>
         <ArrowLeft size={17} /> Back to{" "}
         {isStaff ? "my opportunities" : isEngineer ? "approved opportunities" : "all opportunities"}
@@ -818,5 +818,5 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             </div>
           </form>
         </Modal>}
-    </>;
+    </div>;
 }
