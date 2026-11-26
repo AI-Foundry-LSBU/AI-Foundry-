@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { departments } from "../data/options";
 import { submitOpportunity } from "../data/opportunitiesApi";
+import { SolutionChat } from "../components/SolutionChat";
 import {
   Button,
   Card,
@@ -23,12 +24,15 @@ export function SubmitPage() {
     department: "",
     problemDescription: "",
     proposedImprovement: "",
-    expectedBenefits: ""
+    expectedBenefits: "",
+    hoursPerMonth: "",
+    savingsPerYear: ""
   });
   const [errors, setErrors] = useState({});
   const [submittedId, setSubmittedId] = useState("");
   const [submissionError, setSubmissionError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState("chat");
   const update = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
     setErrors((current) => {
@@ -59,11 +63,27 @@ export function SubmitPage() {
       nextErrors.problemDescription = "Describe the current problem or challenge in at least 20 characters.";
     if (form.proposedImprovement.trim().length < 20)
       nextErrors.proposedImprovement = "Describe the suggested improvement in at least 20 characters.";
+    for (const key of ["hoursPerMonth", "savingsPerYear"]) {
+      const raw = form[key].trim();
+      const number = Number(raw);
+      if (raw && raw !== "0" && (!Number.isFinite(number) || number < 1)) {
+        nextErrors[key] = "Enter 0, or a number that is at least 1.";
+      }
+    }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     setIsSubmitting(true);
     try {
-      const data = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value.trim()]));
+      const data = {
+        title: form.title.trim(),
+        department: form.department.trim(),
+        problemDescription: form.problemDescription.trim(),
+        proposedImprovement: form.proposedImprovement.trim(),
+        expectedBenefits: form.expectedBenefits.trim()
+      };
+      for (const key of ["hoursPerMonth", "savingsPerYear"]) {
+        if (form[key].trim()) data[key] = Number(form[key]);
+      }
       const opportunity = await submitOpportunity(currentUser.email, data);
       setSubmittedId(opportunity.id);
     } catch (error) {
@@ -100,9 +120,12 @@ export function SubmitPage() {
           department: "",
           problemDescription: "",
           proposedImprovement: "",
-          expectedBenefits: ""
+          expectedBenefits: "",
+          hoursPerMonth: "",
+          savingsPerYear: ""
         });
         setSubmittedId("");
+        setStep("chat");
       }}
     >
               Submit Another Opportunity
@@ -110,12 +133,19 @@ export function SubmitPage() {
           </div>
         </Card>
       </div>;
+  const showForm = step === "form";
   return <>
       <PageHeader
-    title="Submit an Opportunity"
-    subtitle="Tell us about a process or service that could be improved."
+    title={showForm ? "Submit an Opportunity" : "Check existing solutions"}
+    subtitle={showForm ? "Tell us about a process or service that could be improved." : null}
+    actions={showForm ? <Button type="button" variant="secondary" onClick={() => setStep("chat")}>
+      Back to solution check
+    </Button> : null}
   />
-      <form onSubmit={submit} noValidate>
+      <div hidden={showForm}>
+        <SolutionChat onContinue={() => setStep("form")} />
+      </div>
+      <form onSubmit={submit} noValidate hidden={!showForm}>
         <Card className="form-card">
           <div className="form-intro">
             <div>
@@ -184,6 +214,12 @@ export function SubmitPage() {
     onChange={(event) => update("proposedImprovement", event.target.value)}
     placeholder="Describe the outcome you would like to achieve. You do not need to propose a technical solution."
   />
+            </Field>
+            <Field label="Time saved" error={errors.hoursPerMonth} helper="Hours per month. Enter 0, or at least 1.">
+              <input type="number" min="0" step="1" inputMode="numeric" placeholder="0" value={form.hoursPerMonth} aria-invalid={Boolean(errors.hoursPerMonth)} onKeyDown={(event) => { if (event.key === "-" || event.key === "e") event.preventDefault(); }} onChange={(event) => { const next = event.target.value; const allowed = next === "" || next === "0" || (/^\d+(\.\d*)?$/.test(next) && !next.startsWith("0") && Number(next.endsWith(".") ? next.slice(0, -1) : next) >= 1); if (!allowed && next.length >= form.hoursPerMonth.length) return; update("hoursPerMonth", next); }} />
+            </Field>
+            <Field label="Money saved" error={errors.savingsPerYear} helper="Pounds per year. Enter 0, or at least 1.">
+              <input type="number" min="0" step="1" inputMode="numeric" placeholder="0" value={form.savingsPerYear} aria-invalid={Boolean(errors.savingsPerYear)} onKeyDown={(event) => { if (event.key === "-" || event.key === "e") event.preventDefault(); }} onChange={(event) => { const next = event.target.value; const allowed = next === "" || next === "0" || (/^\d+(\.\d*)?$/.test(next) && !next.startsWith("0") && Number(next.endsWith(".") ? next.slice(0, -1) : next) >= 1); if (!allowed && next.length >= form.savingsPerYear.length) return; update("savingsPerYear", next); }} />
             </Field>
             <Field
     label="Expected Benefits"

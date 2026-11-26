@@ -35,6 +35,7 @@ export function validateSubmission(input) {
   }
 
   data.expectedBenefits = readText(input, 'expectedBenefits', 500, fields);
+  Object.assign(data, readStatedSavings(input, fields));
   data.source = input.source === undefined ? 'staff_submission' : input.source;
 
   if (!['staff_submission', 'hackathon'].includes(data.source)) {
@@ -48,6 +49,31 @@ export function validateSubmission(input) {
   }
 
   return { data, fields };
+}
+
+function readAmount(input, key, fields) {
+  const value = input[key];
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000_000) {
+    fields[key] = 'Enter a number that is zero or greater.';
+    return null;
+  }
+  return Math.round(value * 100) / 100;
+}
+
+function readWholeAmount(input, key, fields) {
+  const value = readAmount(input, key, fields);
+  if (fields[key] || value === null || value === 0 || value >= 1) return value;
+  fields[key] = 'Enter 0, or a number that is at least 1.';
+  return null;
+}
+
+export function readStatedSavings(input, fields) {
+  return {
+    hoursPerMonth: readWholeAmount(input, 'hoursPerMonth', fields),
+    casesPerMonth: readAmount(input, 'casesPerMonth', fields),
+    savingsPerYear: readWholeAmount(input, 'savingsPerYear', fields)
+  };
 }
 
 function pageInteger(value, defaultValue) {

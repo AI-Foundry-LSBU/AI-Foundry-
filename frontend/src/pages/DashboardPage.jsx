@@ -4,7 +4,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
   FolderKanban,
   Gauge,
@@ -14,6 +13,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
+import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -25,15 +25,17 @@ import {
   TableAction,
   formatCurrency
 } from "../components/ui";
-function hoursSaved(records) {
-  return records.filter((item) => item.unit === "Hours/month").reduce((sum, item) => sum + item.actual, 0);
-}
-function annualSavings(records) {
-  return records.filter((item) => item.unit === "GBP/year").reduce((sum, item) => sum + item.actual, 0);
+function useRecordedBenefits() {
+  const recorded = usePotentialBenefits();
+  return {
+    ...recorded,
+    hours: recorded.loading || recorded.error ? null : recorded.hours,
+    savings: recorded.loading || recorded.error ? null : recorded.savings
+  };
 }
 
 function ManagerDashboard() {
-  const { currentUser, opportunities: samples, benefits } = useApp();
+  const { currentUser, opportunities: samples } = useApp();
   const navigate = useNavigate();
   const liveManager = currentUser.role === "Digital Project Manager";
   const live = useOpportunities(liveManager ? currentUser.email : null, "all");
@@ -43,26 +45,16 @@ function ManagerDashboard() {
       <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
     </div>;
   const opportunities = liveManager ? live.data : samples;
-  const statusCounts = [
-    "Submitted",
-    "Under Review",
-    "Approved",
-    "Rejected"
-  ].map((status) => ({
-    status,
-    value: opportunities.filter((item) => item.status === status).length
-  }));
-  const max = Math.max(...statusCounts.map((item) => item.value), 1);
-  const hours = hoursSaved(benefits);
-  const savings = annualSavings(benefits);
   const submitted = opportunities.filter((item) => item.status === "Submitted").length;
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
   const projects = delivery.data ?? [];
   const activeProjects = projects.filter((item) => item.status !== "Completed");
+  const openSubmissions = opportunities.filter((item) => getOpportunityDisplayStatus(item) !== "Completed");
+  const recentSubmissions = openSubmissions.slice(0, 5);
+  const moreSubmissions = openSubmissions.length - recentSubmissions.length;
   return <>
       <PageHeader
     title="Management Dashboard"
-    subtitle="Review opportunities, follow project delivery and track benefits."
     actions={<Button onClick={() => navigate("/opportunities")}>
             Review opportunities <ArrowRight size={16} />
           </Button>}
@@ -123,7 +115,7 @@ function ManagerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {opportunities.slice(0, 5).map((item) => <tr
+                {recentSubmissions.map((item) => <tr
     key={item.id}
     onClick={() => navigate(`/opportunities/${item.id}`)}
   >
@@ -145,113 +137,31 @@ function ManagerDashboard() {
               </tbody>
             </table>
           </div>
-        </Card>
-        <Card>
-          <div className="card-header">
-            <div>
-              <h2>Opportunities by status</h2>
-              <p>Current portfolio distribution</p>
-            </div>
-          </div>
-          <div className="bar-chart">
-            {statusCounts.map((item) => <div className="bar-row" key={item.status}>
-                <span>{item.status}</span>
-                <div>
-                  <i
-    style={{
-      width: `${Math.max(item.value / max * 100, 8)}%`
-    }}
-  />
-                </div>
-                <strong>{item.value}</strong>
-              </div>)}
-          </div>
-        </Card>
-        <Card className="span-2">
-          <div className="card-header">
-            <div>
-              <h2>Project progress overview</h2>
-              <p>Manual delivery estimate for each project</p>
-            </div>
-            <button
-    className="text-button"
-    onClick={() => navigate("/pipeline")}
-  >
-              Open Project Delivery <ArrowRight size={15} />
-            </button>
-          </div>
-          {delivery.loading && <p role="status">Loading projects…</p>}
-          {delivery.error && <div role="alert">
-            <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
-          </div>}
-          <div className="project-overview">
-            {projects.slice(0, 3).map((project) => {
-    const progress = project.progress;
-    return <button
-      type="button"
-      className="project-progress"
-      key={project.id}
-      onClick={() => navigate(`/projects/${project.id}`)}
-    >
-                  <div>
-                    <strong>{project.title}</strong>
-                    <span>
-                      {project.department} · {project.status}
-                    </span>
-                  </div>
-                  <div className="progress-track">
-                    <i style={{ width: `${progress}%` }} />
-                  </div>
-                  <b>{progress}%</b>
-                </button>;
-  })}
-          </div>
-        </Card>
-        <Card className="benefit-summary">
-          <div className="card-header">
-            <div>
-              <h2>Benefits summary</h2>
-              <p>Validated and forecast impact</p>
-            </div>
-          </div>
-          <div className="benefit-highlight">
-            <Clock3 size={20} />
-            <div>
-              <strong>{hours} hours/month</strong>
-              <span>actual time saved</span>
-            </div>
-          </div>
-          <div className="benefit-highlight">
-            <CircleDollarSign size={20} />
-            <div>
-              <strong>{formatCurrency(savings)}/year</strong>
-              <span>actual financial savings</span>
-            </div>
-          </div>
-          <Button variant="secondary" onClick={() => navigate("/benefits")}>
-            View benefits
-          </Button>
+          {moreSubmissions > 0 && <p className="list-foot">
+              {moreSubmissions} more {moreSubmissions === 1 ? "opportunity is" : "opportunities are"} in All Opportunities.
+            </p>}
         </Card>
       </div>
     </>;
 }
 
 function EngineerDashboard() {
-  const { benefits } = useApp();
+  const { currentUser } = useApp();
   const navigate = useNavigate();
   const delivery = useDeliveryProjects();
+  const recorded = useRecordedBenefits();
   if (delivery.loading) return <div role="status"><EmptyState title="Loading projects…" /></div>;
   if (delivery.error) return <div role="alert">
     <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
   </div>;
-  const projects = delivery.data;
+  const projects = delivery.isLive
+    ? delivery.data.filter((project) => project.assignee?.id === currentUser.id)
+    : delivery.data;
   const countStatus = (status) => projects.filter((item) => item.status === status).length;
-  const hours = hoursSaved(benefits);
-  const savings = annualSavings(benefits);
   return <>
       <PageHeader
     title="Delivery Dashboard"
-    subtitle="Follow approved projects from planning through to completion."
+    subtitle="Projects you have assigned to yourself."
     actions={<Button onClick={() => navigate("/pipeline")}>
             Open Project Delivery <ArrowRight size={16} />
           </Button>}
@@ -288,7 +198,7 @@ function EngineerDashboard() {
           <div className="card-header">
             <div>
               <h2>Project Delivery</h2>
-              <p>Approved projects and their target dates</p>
+              <p>Your assigned projects</p>
             </div>
             <button
     className="text-button"
@@ -309,7 +219,10 @@ function EngineerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {projects.map((project) => <tr
+                {projects.filter((project) => project.status !== "Completed").length === 0 && <tr>
+                  <td colSpan={5}>No active projects. Completed projects are in History.</td>
+                </tr>}
+                {projects.filter((project) => project.status !== "Completed").map((project) => <tr
     key={project.id}
     onClick={() => navigate(`/projects/${project.id}`)}
   >
@@ -331,28 +244,38 @@ function EngineerDashboard() {
               </tbody>
             </table>
           </div>
+          {countStatus("Completed") > 0 && <p className="benefit-note">Completed projects are in History.</p>}
         </Card>
         <Card className="benefit-summary">
           <div className="card-header">
             <div>
-              <h2>Benefits recorded</h2>
-              <p>Measures linked to project delivery</p>
+              <h2>Potential benefits</h2>
+              <p>Estimates from opportunity descriptions, not measured results</p>
             </div>
           </div>
-          <div className="benefit-highlight">
-            <Clock3 size={20} />
-            <div>
-              <strong>{hours} hours/month</strong>
-              <span>actual time saved</span>
-            </div>
-          </div>
-          <div className="benefit-highlight">
-            <BarChart3 size={20} />
-            <div>
-              <strong>{formatCurrency(savings)}/year</strong>
-              <span>actual financial savings</span>
-            </div>
-          </div>
+          {recorded.loading && <p role="status">Loading benefits…</p>}
+          {recorded.error && <div role="alert">
+            <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
+          </div>}
+          {!recorded.loading && !recorded.error && <>
+            {recorded.hours > 0 && <div className="benefit-highlight">
+              <Clock3 size={20} />
+              <div>
+                <strong>{recorded.hours} hours/month</strong>
+                <span>potential time saved</span>
+              </div>
+            </div>}
+            {recorded.savings > 0 && <div className="benefit-highlight">
+              <BarChart3 size={20} />
+              <div>
+                <strong>{formatCurrency(recorded.savings)}/year</strong>
+                <span>potential financial savings</span>
+              </div>
+            </div>}
+            {recorded.hours === 0 && recorded.savings === 0 && <p className="benefit-note">
+              {recorded.reviews.filter((item) => item.recommendation === "worth_pursuing").length} worth pursuing. Hours and savings appear when an opportunity states them.
+            </p>}
+          </>}
           <Button variant="secondary" onClick={() => navigate("/benefits")}>
             View benefits
           </Button>

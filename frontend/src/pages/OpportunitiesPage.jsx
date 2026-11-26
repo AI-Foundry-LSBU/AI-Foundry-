@@ -1,13 +1,13 @@
 import { useState } from "react";
 import {
   Filter,
-  Plus,
   Search
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
 import { departments, opportunityStatuses } from "../data/options";
+import { claimDeliveryProject } from "../data/projectsApi";
 import { useOpportunities } from "../data/useOpportunities";
 import {
   Button,
@@ -24,6 +24,8 @@ export function OpportunitiesPage() {
   const [status, setStatus] = useState("All");
   const [department, setDepartment] = useState("All");
   const [priority, setPriority] = useState("All");
+  const [assigning, setAssigning] = useState("");
+  const [assignError, setAssignError] = useState("");
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
   const useLiveList = isStaff || role === currentUser.role;
@@ -39,9 +41,14 @@ export function OpportunitiesPage() {
     </div>;
 
   const statusOptions = ["All", ...opportunityStatuses];
-  if (useLiveList) statusOptions.push("In Progress", "Testing", "Completed");
-  const scoped = useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved");
-  const matchesSearch = (item) => !search || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(search.toLowerCase());
+  if (useLiveList) statusOptions.push("In Progress", "Testing");
+  const scoped = (useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved"))
+    .filter((item) => isStaff || getOpportunityDisplayStatus(item) !== "Completed");
+  const departmentOptions = Array.from(new Set([
+    ...departments, ...scoped.map((item) => item.department),
+  ])).sort((a, b) => a.localeCompare(b));
+  const searchText = search.trim().toLowerCase();
+  const matchesSearch = (item) => !searchText || `${item.id} ${item.title} ${item.department} ${item.submittedBy ?? ""}`.toLowerCase().includes(searchText);
   const matchesDepartment = (item) => department === "All" || item.department === department;
   const matchesPriority = (item) => priority === "All" || item.priority === priority;
   const narrowed = scoped.filter(
@@ -53,6 +60,18 @@ export function OpportunitiesPage() {
   const statusCount = (item) => narrowed.filter(
     (opportunity) => item === "All" || getOpportunityDisplayStatus(opportunity) === item
   ).length;
+  const filtersActive = search !== "" || status !== "All" || department !== "All" || priority !== "All";
+  const listFoot = (scoped.length > 0 || filtersActive) && <p className="list-foot">
+      {filtered.length === scoped.length
+        ? `${scoped.length} ${scoped.length === 1 ? "opportunity" : "opportunities"}`
+        : `Showing ${filtered.length} of ${scoped.length}`}
+    </p>;
+  const resetFilters = () => {
+    setSearch("");
+    setStatus("All");
+    setDepartment("All");
+    setPriority("All");
+  };
   return <div className="opportunity-workspace">
       <section className="opportunity-masthead">
         <div className="masthead-copy">
@@ -60,7 +79,7 @@ export function OpportunitiesPage() {
             {isStaff ? "My Opportunities" : isEngineer ? "Approved Opportunities" : "All Opportunities"}
           </h1>
           <p>
-            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Approved opportunities and the context behind project delivery." : "Review, prioritise and progress opportunities from across LSBU."}
+            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Assign an approved opportunity to yourself. It then appears in Project Delivery." : "Review, prioritise and progress opportunities from across LSBU."}
           </p>
         </div>
         <div className="masthead-ledger">
@@ -86,9 +105,6 @@ export function OpportunitiesPage() {
               </div>
             </>}
         </div>
-        {isStaff && <Button icon={Plus} onClick={() => navigate("/submit")}>
-            Submit Opportunity
-          </Button>}
       </section>
 
       <section className="opportunity-query">
@@ -97,7 +113,7 @@ export function OpportunitiesPage() {
           <input
     value={search}
     onChange={(event) => setSearch(event.target.value)}
-    placeholder="Search title or opportunity ID"
+    placeholder="Search title, department or ID"
   />
         </label>
         {!isEngineer && <div className="status-tabs" aria-label="Filter by status">
@@ -120,7 +136,7 @@ export function OpportunitiesPage() {
     aria-label="Department"
   >
                 <option value="All">All departments</option>
-                {departments.map((item) => <option key={item}>{item}</option>)}
+                {departmentOptions.map((item) => <option key={item}>{item}</option>)}
               </select>
             </label>
             <label>
@@ -134,21 +150,30 @@ export function OpportunitiesPage() {
                 {["High", "Medium", "Low", "Not set"].map((item) => <option key={item}>{item}</option>)}
               </select>
             </label>
+            <Button variant="secondary" disabled={!filtersActive} onClick={resetFilters}>
+              Reset filters
+            </Button>
           </div>}
       </section>
 
-      {filtered.length ? <section className="opportunity-worklist">
+      {assignError && <p role="alert">{assignError}</p>}
+      {filtered.length ? <section className={`opportunity-worklist${isEngineer ? " engineer-worklist" : ""}`}>
           <div className="worklist-heading">
             <span>Status</span>
             <span>Opportunity</span>
             <span>{isStaff ? "Submitted" : "Owner"}</span>
             <span>Priority</span>
-            <span />
+            <span>{isEngineer ? "Assignment" : ""}</span>
           </div>
-          {filtered.map((item) => <button
+          {filtered.map((item) => <div
     className="opportunity-row"
     key={item.id}
+    role="link"
+    tabIndex={0}
     onClick={() => navigate(`/opportunities/${item.id}`)}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") navigate(`/opportunities/${item.id}`);
+    }}
   >
               <span className="row-status">
                 <StatusBadge status={getOpportunityDisplayStatus(item)} />
@@ -167,13 +192,36 @@ export function OpportunitiesPage() {
                 <small>{isStaff ? item.department : item.submittedDate}</small>
               </span>
               <PriorityBadge priority={item.priority} />
-              <TableAction children="Open" />
-            </button>)}
+              {isEngineer ? <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                {item.assignee?.id === currentUser.id
+                  ? <strong>Assigned to you</strong>
+                  : item.assignee
+                    ? <span>Assigned to {item.assignee.name}</span>
+                    : <Button
+                      disabled={!item.projectId || assigning === item.id}
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        setAssignError("");
+                        setAssigning(item.id);
+                        try {
+                          await claimDeliveryProject(currentUser.email, item.projectId);
+                          live.retry();
+                        } catch (error) {
+                          setAssignError(error.message);
+                        } finally {
+                          setAssigning("");
+                        }
+                      }}
+                    >{assigning === item.id ? "Assigning…" : "Assign to me"}</Button>}
+              </span> : <TableAction children="Open" />}
+            </div>)}
+          {listFoot}
         </section> : <div className="worklist-empty">
           <EmptyState
     title={useLiveList && !scoped.length ? (isEngineer ? "No approved opportunities yet" : "No opportunities yet") : "No opportunities in this view"}
     text={useLiveList && !scoped.length ? (isStaff ? "Submit an opportunity and it will appear here." : isEngineer ? "Opportunities appear here once a manager approves them." : "Submitted opportunities will appear here.") : "Adjust the search or filters to return to the opportunity queue."}
   />
+          {listFoot}
         </div>}
     </div>;
 }

@@ -1,15 +1,13 @@
 import {
   BarChart3,
   BriefcaseBusiness,
-  ChevronDown,
   ClipboardList,
   Gauge,
+  History,
   LogOut,
   Menu,
   Network,
-  PanelLeftClose,
   PlusCircle,
-  UserRound,
   X
 } from "lucide-react";
 import {
@@ -20,6 +18,7 @@ import {
   useNavigate
 } from "react-router-dom";
 import { useState } from "react";
+import { AccountNotices } from "../components/AccountNotices";
 import { useApp } from "../context/AppContext";
 const staffNav = [
   { to: "/opportunities", label: "My Opportunities", icon: ClipboardList },
@@ -29,11 +28,13 @@ const managementNav = [
   { to: "/dashboard", label: "Management Dashboard", icon: Gauge },
   { to: "/opportunities", label: "All Opportunities", icon: ClipboardList },
   { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
+  { to: "/history", label: "History", icon: History },
   { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
 const engineerNav = [
   { to: "/dashboard", label: "Delivery Dashboard", icon: Gauge },
   { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
+  { to: "/history", label: "History", icon: History },
   { to: "/opportunities", label: "Approved Opportunities", icon: ClipboardList },
   { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
 ];
@@ -52,26 +53,27 @@ function pageTitle(pathname, role) {
     return "All Opportunities";
   }
   if (section === "pipeline") return "Project Delivery";
+  if (section === "history") return "History";
   if (section === "projects") return "Project Details";
   if (section === "benefits") return "Benefits Reporting";
   return "AI Foundry";
 }
 function Layout() {
-  const { isAuthenticated, currentUser, signOut, role, setRole } = useApp();
+  const { isAuthenticated, currentUser, signOut, role } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
   const isStaff = role === "Staff";
   const isEngineer = role === "AI Foundry Engineer";
   const nav = isStaff ? staffNav : isEngineer ? engineerNav : managementNav;
-  const user = role === currentUser?.role ? currentUser : role === "Digital Project Manager" ? { name: "Olivia Bennett", initials: "OB", team: "AI Foundry" } : { name: "Alex Morgan", initials: "AM", team: "AI Foundry" };
+  const user = currentUser;
   const currentTitle = pageTitle(location.pathname, role);
-  const changeRole = (nextRole) => {
-    setRole(nextRole);
-    setMobileOpen(false);
-    navigate(nextRole === "Staff" ? "/opportunities" : "/dashboard");
-  };
   if (!isAuthenticated) return <Navigate to="/signin" replace />;
+  if (isStaff && !location.pathname.startsWith('/opportunities') && location.pathname !== '/submit') {
+    return <Navigate to="/opportunities" replace />;
+  }
   return <div className="app-shell">
       <aside className={`sidebar nav-rail ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="brand rail-brand">
@@ -100,8 +102,7 @@ function Layout() {
             </NavLink>)}
         </nav>
         <div className="sidebar-footer rail-footer">
-          <PanelLeftClose size={17} />
-          <span>LSBU</span>
+          <span>Opportunity Tracker</span>
         </div>
       </aside>
       {mobileOpen && <div className="sidebar-scrim" onClick={() => setMobileOpen(false)} />}
@@ -118,19 +119,7 @@ function Layout() {
             <strong>{currentTitle}</strong>
           </div>
           <div className="header-tools">
-            <label className="role-select">
-              <UserRound size={16} />
-              <span>View as</span>
-              <select
-    value={role}
-    onChange={(event) => changeRole(event.target.value)}
-  >
-                {currentUser.role === "Staff" && <option>Staff</option>}
-                <option>Digital Project Manager</option>
-                <option>AI Foundry Engineer</option>
-              </select>
-              <ChevronDown size={14} />
-            </label>
+            <AccountNotices />
             <div className="user-info">
               <div className="avatar">{user.initials}</div>
               <div>
@@ -140,9 +129,13 @@ function Layout() {
             </div>
             <button
     className="sign-out-button"
-    onClick={() => {
-      signOut();
-      navigate("/signin");
+    disabled={signingOut}
+    onClick={async () => {
+      setSignOutError('');
+      setSigningOut(true);
+      try { await signOut(); navigate('/signin'); }
+      catch (error) { setSignOutError(error.message); }
+      finally { setSigningOut(false); }
     }}
     aria-label="Sign out"
   >
@@ -152,6 +145,7 @@ function Layout() {
           </div>
         </header>
         <main className="page-container">
+          {signOutError && <p role="alert" className="error-text">{signOutError}</p>}
           <Outlet />
         </main>
       </div>

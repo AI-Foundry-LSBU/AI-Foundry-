@@ -1,5 +1,6 @@
 import express from 'express';
-import { createProject, findProject, listProjects, updateProject } from './queries.js';
+import { requireRole } from '../middleware/requireRole.js';
+import { claimProject, createProject, findProject, listProjects, updateProject } from './queries.js';
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const statuses = ['not_started', 'in_progress', 'testing', 'completed'];
@@ -18,7 +19,8 @@ function projectResponse(row) {
     targetDate: row.target_date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    notes: row.notes
+    notes: row.notes,
+    assignee: row.assignee_id ? { id: row.assignee_id, name: row.assignee_name } : null
   };
 }
 
@@ -30,13 +32,6 @@ function invalid(res, fields) {
   return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Check the project fields.', fields });
 }
 
-function canAccess(...roles) {
-  return (req, res, next) => {
-    if (roles.includes(req.user.role)) return next();
-    return res.status(403).json({ code: 'FORBIDDEN', message: 'You do not have permission to do that.' });
-  };
-}
-
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000')) return false;
   const date = new Date(value);
@@ -46,13 +41,13 @@ function validDate(value) {
 export function projectRoutes(pool) {
   const router = express.Router();
   const json = express.json({ limit: '64kb' });
-  const delivery = canAccess('manager', 'team');
+  const delivery = requireRole('manager', 'team');
 
   router.get('/projects', delivery, async (req, res) => {
     res.json((await listProjects(pool)).map(projectResponse));
   });
 
-  router.post('/projects', canAccess('manager'), json, async (req, res) => {
+  router.post('/projects', requireRole('manager'), json, async (req, res) => {
     if (!req.body || Array.isArray(req.body)) return invalid(res, { body: 'Send a JSON object.' });
     const { opportunityId, startDate, targetDate } = req.body;
     const fields = {};
@@ -82,26 +77,94 @@ export function projectRoutes(pool) {
     return project ? res.json(projectResponse(project)) : notFound(res);
   });
 
+  router.post('/projects/:id/assignment', requireRole('team'), async (req, res) => {
+    const { id } = req.params;
+    if (!uuid.test(id)) return notFound(res);
+    const result = await claimProject(pool, id, req.user.id);
+    if (result === 'missing') return notFound(res);
+    if (result === 'taken') {
+      return res.status(409).json({
+        code: 'ASSIGNED',
+        message: 'Another engineer is already assigned to this project.'
+      });
+    }
+    return res.json(projectResponse(await findProject(pool, id)));
+  });
+
   router.patch('/projects/:id', delivery, json, async (req, res) => {
     const { id } = req.params;
     if (!uuid.test(id)) return notFound(res);
     if (!req.body || Array.isArray(req.body)) return invalid(res, { body: 'Send a JSON object.' });
-    const { status, progress, note } = req.body;
+    const { status, progress, note, startDate, targetDate } = req.body;
     const fields = {};
-    if (status === undefined && progress === undefined && note === undefined) {
-      fields.body = 'Provide a status, progress estimate or note.';
+    if (status === undefined && progress === undefined && note === undefined && startDate === undefined && targetDate === undefined) {
+      fields.body = 'Provide a status, progress estimate, note or planned dates.';
     }
     if (status !== undefined && !statuses.includes(status)) fields.status = 'Choose a valid delivery status.';
     if (progress !== undefined && (!Number.isInteger(progress) || progress < 0 || progress > 100)) {
       fields.progress = 'Enter a whole number from 0 to 100.';
     }
+    if (startDate !== undefined && !validDate(startDate)) fields.startDate = 'Enter a valid start date.';
+    if (targetDate !== undefined && !validDate(targetDate)) fields.targetDate = 'Enter a valid target date.';
     const text = typeof note === 'string' ? note.trim() : '';
     if (note !== undefined && (!text || text.includes('\0') || [...text].length > 2000)) {
       fields.note = 'Enter a note of 1 to 2000 characters without null characters.';
     }
     if (Object.keys(fields).length) return invalid(res, fields);
 
-    const updated = await updateProject(pool, id, req.user.id, { status, progress, note: text || undefined });
+    const previous = await pool.query(
+      `SELECT p.status, p.opportunity_id, p.start_date::text AS start_date, p.target_date::text AS target_date,
+              o.status AS opportunity_status
+       FROM projects p
+       JOIN opportunities o ON o.id = p.opportunity_id
+       WHERE p.id = $1`,
+      [id]
+    );
+    const before = previous.rows[0];
+    if (!before) return notFound(res);
+    const nextStart = startDate ?? before.start_date;
+    const nextTarget = targetDate ?? before.target_date;
+    if (nextStart && nextTarget && nextTarget < nextStart) {
+      return invalid(res, { targetDate: 'Choose a target date on or after the start date.' });
+    }
+    if ((startDate !== undefined || targetDate !== undefined) && req.user.role !== 'manager') {
+      return res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Only a manager can set the planned dates.'
+      });
+    }
+    const decided = ['approved', 'rejected', 'in_progress', 'completed'].includes(before.opportunity_status);
+    if (req.user.role === 'manager' && decided && status !== undefined && status !== before.status) {
+      return res.status(403).json({
+        code: 'DECIDED',
+        message: 'After a decision, engineers update progress from In Progress to Completed.'
+      });
+    }
+    if (req.user.role === 'team') {
+      const owner = await pool.query('SELECT assigned_to FROM projects WHERE id = $1', [id]);
+      if (owner.rows[0]?.assigned_to && owner.rows[0].assigned_to !== req.user.id) {
+        return res.status(403).json({
+          code: 'ASSIGNED',
+          message: 'This project is assigned to another engineer.'
+        });
+      }
+      if (status !== undefined && status !== before.status && !['in_progress', 'testing', 'completed'].includes(status)) {
+        return res.status(400).json({
+          code: 'VALIDATION_ERROR',
+          message: 'Check the project fields.',
+          fields: { status: 'Choose In Progress, Testing or Completed.' }
+        });
+      }
+    }
+    if (before.status === 'completed' && status !== undefined && status !== 'completed') {
+      return res.status(409).json({
+        code: 'COMPLETED',
+        message: 'A completed project stays completed.'
+      });
+    }
+    const updated = await updateProject(pool, id, req.user.id, {
+      status, progress, note: text || undefined, startDate, targetDate
+    });
     return updated ? res.json(projectResponse(await findProject(pool, id))) : notFound(res);
   });
 
