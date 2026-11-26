@@ -596,3 +596,46 @@ omitted optional fields to their defaults; it is not a partial update.
 Staff and engineers cannot read manager-only catalogue entries or management
 metadata. Search filtering takes place in PostgreSQL. No catalogue management
 screen is included; use an authenticated API client for these endpoints.
+
+### Chatbot integration
+
+`POST /api/v1/solutions/check` accepts `{ "text": "Book a meeting room" }` and
+optional `previousMessages`: up to eight `{ "role": "user" | "assistant",
+"text": "..." }` records. Text/messages are limited to 800 characters each.
+Responses contain `decision` (`match`, `none`, `clarify`, or `unavailable`),
+`question`, `matches`, `message`, and `canSubmit: true`. Matches include the
+current catalogue name, description, reason, HTTPS link or access instructions.
+The browser no longer contains its own list of six services.
+
+The checker searches accessible verified entries, supplies at most eight
+candidates to OpenAI and accepts at most three returned candidate IDs. Unknown
+IDs are discarded. Links and access instructions come from PostgreSQL, never
+from the model. Entries changed, archived, unverified or restricted during an
+AI call are discarded before the reply. Search is bounded; a no-match response
+is not a claim that no solution exists anywhere at LSBU.
+
+The existing `OPENAI_API_KEY` and `OPENAI_MODEL` settings are reused. Set the key
+only in the private `backend/.env`; never in a `VITE_` variable or frontend file.
+ChatGPT subscriptions and OpenAI API billing are separate. The default model
+remains `gpt-4o-mini`. No new runtime dependency is needed. If a configured model
+cannot support the requested structured output, the checker fails safely.
+
+The API call has a 20-second timeout and a 500-token output cap. The route allows
+20 checks per signed-in account per five minutes, using an in-memory limiter
+for this single-process prototype. Multiple API replicas would need a shared
+limiter store. No conversation transcript is saved by this feature. Eligible
+candidate descriptions and the bounded conversation are sent to OpenAI; do not
+enter personal/sensitive information in test conversations. `store=false` is
+set, but it is not a promise of zero retention by the provider.
+
+On missing configuration (503), provider error/refusal/invalid output/timeout
+(502), or rate limiting (429), the response exposes no provider error details
+or credentials and keeps `canSubmit=true`. The frontend shows the fallback and
+keeps **Submit anyway** available before questions, after recommendations and
+after failures. The ordinary submission endpoint never requires a chatbot result.
+Restart cancels the previous browser request and ignores late responses.
+
+Run backend checks with `npm test` and `TEST_DATABASE_URL` set as described above.
+From `frontend/`, run `npm test` for the response/card checks and `npm run build`.
+Provider responses in the automated tests are simulated; those tests do not
+spend API credits or prove a real key/model/account is operational.

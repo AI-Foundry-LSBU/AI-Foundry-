@@ -4,7 +4,7 @@ import { searchTerms } from './validation.js';
 export async function searchSolutions(pool, { role, q = '', limit = 20, state = 'all', management = false }) {
   const terms = searchTerms(q);
   const { rows } = await pool.query(`
-    SELECT s.*, count(*) OVER ()::integer AS total_count,
+    SELECT s.*, s.updated_at::text AS content_version, count(*) OVER ()::integer AS total_count,
       (SELECT count(*) FROM unnest($1::text[]) term
        WHERE strpos(lower(s.name || ' ' || s.description || ' ' || array_to_string(s.keywords, ' ')), term) > 0) AS relevance
     FROM solution_catalogue s
@@ -21,7 +21,7 @@ export async function searchSolutions(pool, { role, q = '', limit = 20, state = 
 }
 
 export async function findPublishedSolutions(pool, ids, role) {
-  const { rows } = await pool.query(`SELECT * FROM solution_catalogue
+  const { rows } = await pool.query(`SELECT *, updated_at::text AS content_version FROM solution_catalogue
     WHERE id = ANY($1::uuid[]) AND active AND verified
       AND (visibility = 'all_users' OR $2 = 'manager')`, [ids, role]);
   return rows;

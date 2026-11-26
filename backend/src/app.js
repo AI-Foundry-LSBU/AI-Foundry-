@@ -19,7 +19,7 @@ export function createApp(pool, options = {}) {
     res.set('Cache-Control', 'no-store');
     next();
   }, sessions.middleware, authRoutes(pool, sessions, options), sessions.requireUser, requireCsrf,
-  opportunityRoutes(pool, options), projectRoutes(pool), benefitRoutes(pool), notificationRoutes(pool), catalogueRoutes(pool), solutionRoutes(options));
+  opportunityRoutes(pool, options), projectRoutes(pool), benefitRoutes(pool), notificationRoutes(pool), catalogueRoutes(pool), solutionRoutes(pool, options));
 
   app.use((req, res) => {
     res.status(404).json({ code: 'NOT_FOUND', message: 'Route not found.' });

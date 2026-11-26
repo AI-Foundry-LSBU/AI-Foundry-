@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { RotateCcw, Send } from "lucide-react";
 import { Button } from "./ui";
 import { requestApi } from "../data/apiRequest";
-import { cardsFor, greetingMessage } from "../data/solutionChat";
+import { greetingMessage, solutionReply } from "../data/solutionChat";
 
 function AliceAvatar() {
   return <svg className="alice-avatar" viewBox="0 0 40 40" role="img" aria-label="Alice">
@@ -17,12 +17,12 @@ export function SolutionChat({ onContinue }) {
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const logRef = useRef(null);
-  const timerRef = useRef(null);
+  const requestRef = useRef(null);
   const inputId = useId();
   const waiting = typing;
   const hasUserMessage = messages.some((message) => message.role === "user");
 
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => () => requestRef.current?.abort(), []);
 
   useEffect(() => {
     const log = logRef.current;
@@ -39,56 +39,62 @@ export function SolutionChat({ onContinue }) {
     setMessages([...messages, userMessage]);
     setDraft("");
     setTyping(true);
-    clearTimeout(timerRef.current);
 
     const rejected = (showedSolutions || last?.kind === "clarify")
       && /none of these|not these|does not cover|doesn't cover|do not cover|don't cover|still need|not what i|something else|no suitable/.test(text.toLowerCase());
     if (rejected) {
-      timerRef.current = setTimeout(() => {
-        setMessages((current) => [...current, {
+      setMessages((current) => [...current, {
           id: crypto.randomUUID(),
           role: "assistant",
           kind: "none",
-          text: "Those London South Bank University services do not cover this. Continue to the form and describe what is still missing."
-        }]);
-        setTyping(false);
-      }, 300);
+          text: "If these suggestions do not meet your needs, continue to the form and describe what is missing."
+      }]);
+      setTyping(false);
       return;
     }
 
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const previousMessages = messages.filter((message) => message.kind !== "greeting")
+      .slice(-8).map(({ role, text: messageText }) => ({ role, text: messageText }));
     requestApi("/solutions/check", {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, previousMessages })
     }, "Existing services could not be checked. Please try again.").then((result) => {
-      const cards = result.decision === "match" ? cardsFor(result.matches) : [];
-      const reply = cards.length
-        ? {
-          kind: "found",
-          text: cards.length === 1
-            ? "London South Bank University already has a service that does this."
-            : "London South Bank University already has services that do this.",
-          solutions: cards
-        }
-        : result.decision === "clarify"
-          ? { kind: "clarify", text: "What happens in the work at London South Bank University today, and who does it?" }
-          : { kind: "none", text: "None of the existing London South Bank University services do that. You can submit an opportunity and the AI Foundry team will review it." };
+      if (requestRef.current !== controller) return;
+      const reply = solutionReply(result);
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", ...reply }]);
-    }).catch(() => {
+    }).catch((error) => {
+      if (error.name === "AbortError" || requestRef.current !== controller) return;
       setMessages((current) => [...current, {
         id: crypto.randomUUID(),
         role: "assistant",
         kind: "none",
         text: "Existing services could not be checked. Please try again, or continue to the form."
       }]);
-    }).finally(() => setTyping(false));
+    }).finally(() => {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setTyping(false);
+      }
+    });
   };
 
   const restart = () => {
-    clearTimeout(timerRef.current);
+    requestRef.current?.abort();
+    requestRef.current = null;
     setTyping(false);
     setDraft("");
     setMessages([greetingMessage()]);
+  };
+
+  const continueToForm = () => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setTyping(false);
+    onContinue();
   };
 
   return <section className="solution-chat" aria-labelledby="solution-chat-title">
@@ -104,8 +110,8 @@ export function SolutionChat({ onContinue }) {
         <Button type="button" variant="secondary" icon={RotateCcw} onClick={restart} disabled={!hasUserMessage && !waiting}>
           Restart
         </Button>
-        <Button type="button" variant="secondary" onClick={onContinue}>
-          Continue to the form
+        <Button type="button" variant="secondary" onClick={continueToForm}>
+          Submit anyway
         </Button>
       </div>
     </div>
@@ -122,9 +128,10 @@ export function SolutionChat({ onContinue }) {
               <p>{solution.description}</p>
               <p className="solution-reason">{solution.reason}</p>
               {solution.href && <a href={solution.href} target="_blank" rel="noreferrer">Open {solution.name}</a>}
+              {solution.accessInstructions && <p>{solution.accessInstructions}</p>}
             </li>)}
           </ul>}
-          {message.kind === "none" && <Button type="button" onClick={onContinue}>Submit an opportunity</Button>}
+          {["none", "found"].includes(message.kind) && <Button type="button" onClick={continueToForm}>Submit anyway</Button>}
         </article>
       </div>)}
       {typing && <div className="solution-turn solution-turn-assistant">

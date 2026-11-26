@@ -23,6 +23,9 @@ info:
     a read-only timeline for managers. Its frontend timeline is a separate task.
     US09 extends the existing in-app notifications with atomic generation and
     read/unread retrieval. Notifications are not sent by email.
+    US10 stores existing solutions in a manager-controlled catalogue and grounds
+    the pre-submission chatbot in verified, active, accessible catalogue results.
+    The chatbot never prevents submission, including after a recommendation or failure.
 
     **Sign-in:** provisioned coursework accounts use email and an application
     password. Login creates a PostgreSQL-backed session in the HttpOnly
@@ -72,6 +75,80 @@ security:
   - cookieSession: []
 
 paths:
+  /solutions/check:
+    post:
+      tags: [Solutions]
+      operationId: checkExistingSolutions
+      summary: Check verified catalogue candidates before submitting (US10)
+      description: |
+        Uses the existing server-side OpenAI integration. Search retrieves up to
+        eight active, verified candidates available to the caller; if no terms
+        match, up to eight available entries form a bounded semantic fallback.
+        When no accessible verified entries exist, returns none without calling AI.
+        This is a bounded search, not proof that no university-wide solution exists.
+        AI selects at most three candidate IDs or asks one relevant follow-up question.
+        IDs are validated again on the server; names, descriptions, links and access
+        instructions come from current catalogue records, not model output.
+        Withdrawn, restricted or changed candidates are discarded before responding.
+        Never sends private verification metadata or API keys in the prompt.
+        Limited to 20 checks per signed-in account per five minutes per API process.
+        Timeout is 20 seconds. No-match, provider failure and rate limiting never
+        prevent POST /opportunities; canSubmit is always true in check results.
+        Previous messages are bounded client context, not a server-persisted transcript.
+      security:
+        - cookieSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolutionCheckInput'
+            example:
+              text: A meeting room for our staff team.
+              previousMessages:
+                - role: user
+                  text: I need to book rooms.
+                - role: assistant
+                  text: Is this a staff meeting room or a student study room?
+      responses:
+        '200':
+          description: Match, no match or clarification. Staff may always submit anyway.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionCheckResult'
+              example:
+                decision: clarify
+                question: Is this a staff meeting room or a student study room?
+                matches: []
+                canSubmit: true
+                message: Is this a staff meeting room or a student study room?
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          description: Per-user check limit reached; ordinary submission remains available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionCheckFailure'
+        '502':
+          description: Provider failed, refused, timed out or returned invalid output. No provider details are exposed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionCheckFailure'
+        '503':
+          description: OpenAI API key is not configured; submission remains available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionCheckFailure'
+
   /solutions:
     get:
       tags: [Solutions]
@@ -1209,6 +1286,83 @@ components:
             message: This opportunity cannot move to that status from its current one.
 
   schemas:
+    SolutionCheckInput:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 800
+        previousMessages:
+          type: array
+          maxItems: 8
+          default: []
+          items:
+            type: object
+            additionalProperties: false
+            required: [role, text]
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              text:
+                type: string
+                minLength: 1
+                maxLength: 800
+    SolutionRecommendation:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, href, accessInstructions, reason]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        href:
+          type: string
+          nullable: true
+          description: Current HTTPS link from the verified catalogue, or null when access instructions are used.
+        accessInstructions:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          maxLength: 240
+    SolutionCheckResult:
+      type: object
+      required: [decision, question, matches, canSubmit, message]
+      properties:
+        decision:
+          type: string
+          enum: [match, none, clarify, unavailable]
+        question:
+          type: string
+          nullable: true
+          maxLength: 240
+        matches:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/SolutionRecommendation'
+        canSubmit:
+          type: boolean
+          enum: [true]
+        message:
+          type: string
+    SolutionCheckFailure:
+      allOf:
+        - $ref: '#/components/schemas/SolutionCheckResult'
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              enum: [SOLUTION_CHECK_UNAVAILABLE, SOLUTION_CHECK_FAILED, TOO_MANY_CHECKS]
     SolutionInput:
       type: object
       additionalProperties: false
