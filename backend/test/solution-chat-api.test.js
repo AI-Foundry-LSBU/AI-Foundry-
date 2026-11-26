@@ -123,3 +123,23 @@ test('US10 per-user rate limiting permits another user and never prevents submis
   assert.equal((await send(server, { text: 'books' }, engineer)).status, 200);
   assert.equal((await request(server, '/api/v1/opportunities', { email: staff, body: submission })).status, 201);
 });
+
+test('US10 a real adapter quota response returns safe unavailable data and staff can still submit', async () => {
+  const urls = [];
+  const server = await fixture.open({ checkSolutions: (text, options) => requestSolutionCheck(text, {
+    ...options, apiKey: 'FAKE-GEMINI-KEY', fetchImpl: async (url) => {
+      urls.push(url);
+      return new Response('FAKE-GEMINI-KEY private quota details', { status: 429 });
+    }
+  }) });
+  await create(server);
+  const result = await send(server);
+  assert.equal(result.status, 503);
+  assert.equal(result.body.decision, 'unavailable');
+  assert.equal(result.body.canSubmit, true);
+  assert.deepEqual(result.body.matches, []);
+  assert.equal(JSON.stringify(result.body).includes('FAKE-GEMINI-KEY'), false);
+  assert.equal(urls.length, 1);
+  assert.ok(urls[0].startsWith('https://generativelanguage.googleapis.com/'));
+  assert.equal((await request(server, '/api/v1/opportunities', { email: staff, body: submission })).status, 201);
+});

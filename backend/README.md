@@ -597,7 +597,7 @@ Staff and engineers cannot read manager-only catalogue entries or management
 metadata. Search filtering takes place in PostgreSQL. No catalogue management
 screen is included; use an authenticated API client for these endpoints.
 
-### Chatbot integration
+### Chatbot integration: Gemini for private experiments
 
 `POST /api/v1/solutions/check` accepts `{ "text": "Book a meeting room" }` and
 optional `previousMessages`: up to eight `{ "role": "user" | "assistant",
@@ -608,34 +608,62 @@ current catalogue name, description, reason, HTTPS link or access instructions.
 The browser no longer contains its own list of six services.
 
 The checker searches accessible verified entries, supplies at most eight
-candidates to OpenAI and accepts at most three returned candidate IDs. Unknown
+candidates to Gemini and accepts at most three returned candidate IDs. Unknown
 IDs are discarded. Links and access instructions come from PostgreSQL, never
 from the model. Entries changed, archived, unverified or restricted during an
 AI call are discarded before the reply. Search is bounded; a no-match response
 is not a claim that no solution exists anywhere at LSBU.
 
-The existing `OPENAI_API_KEY` and `OPENAI_MODEL` settings are reused. Set the key
-only in the private `backend/.env`; never in a `VITE_` variable or frontend file.
-ChatGPT subscriptions and OpenAI API billing are separate. The default model
-remains `gpt-4o-mini`. No new runtime dependency is needed. If a configured model
-cannot support the requested structured output, the checker fails safely.
+**Agreed scope: private developer experiments, with Google billing disabled.**
+Google's current terms require Paid Services when making an API client available
+to UK users. This setup must not be described as a free deployment option for
+an LSBU-facing website. This adapter returns unavailable in production mode.
+See `US10-Gemini-private-setup.md` and [Google's terms](https://ai.google.dev/gemini-api/terms).
 
-The API call has a 20-second timeout and a 500-token output cap. The route allows
-20 checks per signed-in account per five minutes, using an in-memory limiter
-for this single-process prototype. Multiple API replicas would need a shared
-limiter store. No conversation transcript is saved by this feature. Eligible
-candidate descriptions and the bounded conversation are sent to OpenAI; do not
-enter personal/sensitive information in test conversations. `store=false` is
-set, but it is not a promise of zero retention by the provider.
+Create a key in [Google AI Studio](https://aistudio.google.com/api-keys), using a
+project that displays **Free tier** and has no linked billing account. Configure
+only the private backend/.env:
 
-On missing configuration (503), provider error/refusal/invalid output/timeout
-(502), or rate limiting (429), the response exposes no provider error details
-or credentials and keeps `canSubmit=true`. The frontend shows the fallback and
-keeps **Submit anyway** available before questions, after recommendations and
-after failures. The ordinary submission endpoint never requires a chatbot result.
-Restart cancels the previous browser request and ignores late responses.
+```dotenv
+GEMINI_API_KEY=your-own-private-key
+GEMINI_MODEL=gemini-3.5-flash-lite
+```
 
-Run backend checks with `npm test` and `TEST_DATABASE_URL` set as described above.
-From `frontend/`, run `npm test` for the response/card checks and `npm run build`.
-Provider responses in the automated tests are simulated; those tests do not
-spend API credits or prove a real key/model/account is operational.
+The default model is Gemini 3.5 Flash-Lite; Gemini 3.1 Flash-Lite is also allowed.
+Both have a published free tier as checked on 26 November 2026. Other model
+names are rejected before a request. **The application cannot determine whether
+your Google project has billing enabled.** Model selection does not force free
+billing if the key belongs to a paid project. Do not enable billing or upgrade
+for these experiments. Eligibility, model availability and quota are controlled
+by Google and must be checked in your own account.
+
+Requests use Google's generateContent endpoint, a server-only x-goog-api-key
+header, JSON Schema output, a 20-second timeout, minimal thinking and a
+1,024-token output cap. No Google Search tools, other paid tools, fallback models
+or automatic retries are enabled. There is no fallback to OpenAI. An exhausted
+Google quota returns a safe 503 response and staff can still submit an opportunity.
+No new package or database migration is needed for this provider change.
+
+Earlier optional benefit AI helpers still use OPENAI_API_KEY. Leave that key
+empty for a no-paid-API setup; those optional helpers will be unavailable while
+manual benefit recording continues to work. This patch changes the US10 checker,
+not every AI feature in the repository.
+
+The route allows 20 checks per signed-in account per five minutes, using an
+in-memory limiter for the single-process prototype. Multiple API replicas would
+need a shared limiter store. This feature saves no conversation transcript.
+Eligible catalogue descriptions/keywords and bounded chat context are sent to
+Google; verification metadata, access links and API credentials are not part
+of the prompt. Use synthetic coursework examples for these experiments and
+review Google's data-use terms. No zero-retention guarantee is made.
+
+On missing configuration or unsupported/production configuration (503), provider
+error/refusal/invalid output/timeout (502), provider quota exhaustion (503), or
+local route rate limiting (429), responses expose no provider details or keys
+and retain canSubmit=true. The frontend keeps Submit anyway available. Ordinary
+submission never requires a chatbot result. Restart cancels the browser request
+and ignores late responses.
+
+Run backend checks with npm test and TEST_DATABASE_URL set as described above.
+From frontend/, run npm test and npm run build. Provider responses in automated
+tests are simulated; no real Google key/quota/model response has been verified.

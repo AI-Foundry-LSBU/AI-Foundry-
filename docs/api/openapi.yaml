@@ -81,7 +81,7 @@ paths:
       operationId: checkExistingSolutions
       summary: Check verified catalogue candidates before submitting (US10)
       description: |
-        Uses the existing server-side OpenAI integration. Search retrieves up to
+        Uses server-side Gemini for private developer experiments. Search retrieves up to
         eight active, verified candidates available to the caller; if no terms
         match, up to eight available entries form a bounded semantic fallback.
         When no accessible verified entries exist, returns none without calling AI.
@@ -92,7 +92,12 @@ paths:
         Withdrawn, restricted or changed candidates are discarded before responding.
         Never sends private verification metadata or API keys in the prompt.
         Limited to 20 checks per signed-in account per five minutes per API process.
-        Timeout is 20 seconds. No-match, provider failure and rate limiting never
+        Uses a Google Free-tier project without linked billing; the server cannot
+        verify the Google billing tier. This private adapter is disabled in production.
+        Google terms require a separate paid-services decision for UK user-facing deployment.
+        Only gemini-3.5-flash-lite and gemini-3.1-flash-lite are accepted. No paid
+        fallback, OpenAI fallback, automatic retry or external search tool is enabled.
+        Timeout is 20 seconds; output cap is 1024 tokens. No-match, provider failure and rate limiting never
         prevent POST /opportunities; canSubmit is always true in check results.
         Previous messages are bounded client context, not a server-persisted transcript.
       security:
@@ -137,13 +142,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/SolutionCheckFailure'
         '502':
-          description: Provider failed, refused, timed out or returned invalid output. No provider details are exposed.
+          description: Gemini failed, refused, timed out or returned invalid output. No provider details are exposed.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SolutionCheckFailure'
         '503':
-          description: OpenAI API key is not configured; submission remains available.
+          description: Gemini key is missing, model is not allowed, private adapter is in production mode, or Google quota is exhausted; submission remains available.
           content:
             application/json:
               schema:
