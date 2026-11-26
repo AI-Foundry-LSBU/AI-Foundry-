@@ -568,3 +568,31 @@ The visibility rule applies in SQL before list filtering and pagination. Staff
 ownership and manager-only write rules are checked by the backend even if a
 caller bypasses the website. Academic and non-academic staff share the Staff
 permission role; this version does not verify university employment categories.
+## Existing-solution catalogue (US10)
+
+Run `npm run db:migrate` from `backend/` after updating. Migration 017 imports
+the six prototype service examples as **unverified drafts**. They are not new
+claims that those services or their features have been checked. A manager must
+review the current service information/access route before explicitly verifying
+an entry. Migration reruns preserve saved edits and verification states.
+
+The API uses the existing session cookie and CSRF token:
+
+| Endpoint | Access | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/solutions?q=room&limit=20` | Signed-in users | Search active, verified, accessible records only. |
+| `GET /api/v1/solutions/catalogue?state=draft` | Manager | Inspect drafts, verified entries or archived entries; `state=all` is the default. |
+| `POST /api/v1/solutions/catalogue` | Manager + CSRF | Create a catalogue entry. |
+| `PUT /api/v1/solutions/catalogue/:id` | Manager + CSRF | Replace the full editable record, verify/unverify it, or archive it with `active=false`. |
+
+Editable fields are `name`, `description`, `keywords` (up to 20), `href`
+(HTTPS only), `accessInstructions`, `visibility` (`all_users` or `manager_only`),
+`active`, `verified`, and `verificationNotes`. A link or access instructions are
+required. Setting `verified=true` requires an explanation of the verification;
+the server records the manager ID and verification date. Editing content without
+explicitly setting `verified=true` withdraws it until checked again. PUT resets
+omitted optional fields to their defaults; it is not a partial update.
+
+Staff and engineers cannot read manager-only catalogue entries or management
+metadata. Search filtering takes place in PostgreSQL. No catalogue management
+screen is included; use an authenticated API client for these endpoints.

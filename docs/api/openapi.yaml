@@ -65,11 +65,142 @@ tags:
     description: Read-only opportunity and linked delivery timeline (US08)
   - name: Notifications
     description: In-app updates and read status for the opportunity owner (US09)
+  - name: Solutions
+    description: Verified existing solutions and manager-controlled catalogue (US10)
 
 security:
   - cookieSession: []
 
 paths:
+  /solutions:
+    get:
+      tags: [Solutions]
+      operationId: searchSolutions
+      summary: Search verified active solutions available to the signed-in user
+      description: |
+        Staff and engineers receive all_users entries only. Managers may also
+        receive manager_only entries. Draft and archived entries are excluded.
+        Verification notes and account IDs are never part of this response.
+        Keyword search matches any meaningful term in name, description or keywords;
+        matches rank by term count, then name and ID. Empty search lists available entries.
+      parameters:
+        - $ref: '#/components/parameters/SolutionSearch'
+        - $ref: '#/components/parameters/SolutionLimit'
+      responses:
+        '200':
+          description: Available solutions, including an empty list when none match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionSearchPage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /solutions/catalogue:
+    get:
+      tags: [Solutions]
+      operationId: listSolutionCatalogue
+      summary: Manager-only catalogue list, including drafts and archived entries
+      parameters:
+        - $ref: '#/components/parameters/SolutionSearch'
+        - $ref: '#/components/parameters/SolutionLimit'
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [all, verified, draft, archived]
+            default: all
+      responses:
+        '200':
+          description: Manager catalogue results with verification metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionCataloguePage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Solutions]
+      operationId: createSolutionCatalogueEntry
+      summary: Create a catalogue entry as a manager
+      security:
+        - cookieSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolutionInput'
+      responses:
+        '201':
+          description: Created entry with server-owned verification and author metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedSolution'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /solutions/catalogue/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      tags: [Solutions]
+      operationId: replaceSolutionCatalogueEntry
+      summary: Replace, verify, unverify or archive a catalogue entry as a manager
+      description: |
+        Supply the full editable record. Optional fields reset to defaults when
+        omitted. Set active=false to archive without deleting. Setting verified=true
+        requires verificationNotes and stamps the current manager and date on the server.
+        Setting verified=false clears verifiedBy and verifiedAt. Reverify edited content
+        explicitly; omission of verified defaults to false. There is no delete endpoint.
+      security:
+        - cookieSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolutionInput'
+      responses:
+        '200':
+          description: Saved catalogue entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedSolution'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Catalogue entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /auth/csrf:
     get:
       tags: [Authentication]
@@ -955,6 +1086,21 @@ components:
       description: Session-bound CSRF token required for write requests.
 
   parameters:
+    SolutionSearch:
+      name: q
+      in: query
+      schema:
+        type: string
+        maxLength: 200
+        default: ''
+    SolutionLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
     OpportunityId:
       name: id
       in: path
@@ -1063,6 +1209,154 @@ components:
             message: This opportunity cannot move to that status from its current one.
 
   schemas:
+    SolutionInput:
+      type: object
+      additionalProperties: false
+      required: [name, description]
+      description: |
+        At least one of href or accessInstructions must be nonempty.
+        verified=true requires nonempty verificationNotes. Only managers may write.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        keywords:
+          type: array
+          maxItems: 20
+          default: []
+          items:
+            type: string
+            minLength: 1
+            maxLength: 50
+        href:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: HTTPS URL without embedded credentials, or null.
+        accessInstructions:
+          type: string
+          nullable: true
+          maxLength: 1000
+        visibility:
+          type: string
+          enum: [all_users, manager_only]
+          default: all_users
+        active:
+          type: boolean
+          default: true
+        verified:
+          type: boolean
+          default: false
+        verificationNotes:
+          type: string
+          nullable: true
+          maxLength: 2000
+    PublishedSolution:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, href, accessInstructions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        href:
+          type: string
+          nullable: true
+        accessInstructions:
+          type: string
+          nullable: true
+    ManagedSolution:
+      type: object
+      required: [id, name, description, href, accessInstructions, keywords, visibility, active, verified, verificationNotes, verifiedBy, verifiedAt, createdBy, updatedBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        href:
+          type: string
+          nullable: true
+        accessInstructions:
+          type: string
+          nullable: true
+        keywords:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+          enum: [all_users, manager_only]
+        active:
+          type: boolean
+        verified:
+          type: boolean
+        verificationNotes:
+          type: string
+          nullable: true
+        verifiedBy:
+          type: string
+          format: uuid
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+        updatedBy:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SolutionSearchPage:
+      type: object
+      required: [items, total, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedSolution'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+    SolutionCataloguePage:
+      type: object
+      required: [items, total, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManagedSolution'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
     CsrfToken:
       type: object
       required: [csrfToken]
