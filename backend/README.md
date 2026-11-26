@@ -602,10 +602,13 @@ screen is included; use an authenticated API client for these endpoints.
 `POST /api/v1/solutions/check` accepts `{ "text": "Book a meeting room" }` and
 optional `previousMessages`: up to eight `{ "role": "user" | "assistant",
 "text": "..." }` records. Text/messages are limited to 800 characters each.
-Responses contain `decision` (`match`, `none`, `clarify`, or `unavailable`),
+Responses contain `decision` (`match`, `none`, `clarify`, `help`, or `unavailable`),
 `question`, `matches`, `message`, and `canSubmit: true`. Matches include the
 current catalogue name, description, reason, HTTPS link or access instructions.
-The browser no longer contains its own list of six services.
+The browser no longer contains its own list of six services. Reviewed application
+help answers submission/tracking and other usage questions without an AI call.
+Submission help provides an Open opportunity form action. It does not retrieve
+private records or change application data.
 
 The checker searches accessible verified entries, supplies at most eight
 candidates to Gemini and accepts at most three returned candidate IDs. Unknown
@@ -618,7 +621,7 @@ is not a claim that no solution exists anywhere at LSBU.
 Google's current terms require Paid Services when making an API client available
 to UK users. This setup must not be described as a free deployment option for
 an LSBU-facing website. This adapter returns unavailable in production mode.
-See `US10-Gemini-private-setup.md` and [Google's terms](https://ai.google.dev/gemini-api/terms).
+See [ChatBot-setup.md](ChatBot-setup.md) and [Google's terms](https://ai.google.dev/gemini-api/terms).
 
 Create a key in [Google AI Studio](https://aistudio.google.com/api-keys), using a
 project that displays **Free tier** and has no linked billing account. Configure
@@ -639,15 +642,19 @@ by Google and must be checked in your own account.
 
 Requests use Google's generateContent endpoint, a server-only x-goog-api-key
 header, JSON Schema output, a 20-second timeout, minimal thinking and a
-1,024-token output cap. No Google Search tools, other paid tools, fallback models
-or automatic retries are enabled. There is no fallback to OpenAI. An exhausted
-Google quota returns a safe 503 response and staff can still submit an opportunity.
+1,024-token output cap for catalogue checks and benefit suggestions; reviews
+have a 4,096-token cap. No Google Search tools, other paid tools, fallback models
+or automatic retries in the provider adapter are enabled. There is no fallback
+to another provider. An exhausted Google quota returns a safe 503 response and staff can still submit an opportunity.
 No new package or database migration is needed for this provider change.
 
-Earlier optional benefit AI helpers still use OPENAI_API_KEY. Leave that key
-empty for a no-paid-API setup; those optional helpers will be unavailable while
-manual benefit recording continues to work. This patch changes the US10 checker,
-not every AI feature in the repository.
+All external AI features now use the shared `src/ai/gemini.js` adapter: catalogue
+checks, benefit suggestions and opportunity benefit reviews. Their settings are
+GEMINI_API_KEY and GEMINI_MODEL; retired OpenAI variables can be removed.
+The private-only production guard applies to all three. Existing saved reviews
+are retained. Manual submission and benefit recording remain available on AI
+failure. See [ChatBot-setup.md](ChatBot-setup.md) for workflows, data sent to the
+provider, catalogue management, application help and testing.
 
 The route allows 20 checks per signed-in account per five minutes, using an
 in-memory limiter for the single-process prototype. Multiple API replicas would

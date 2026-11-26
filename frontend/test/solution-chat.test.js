@@ -19,3 +19,11 @@ test('US10 specific follow-up and failure/no-match replies preserve the submissi
   assert.deepEqual(solutionReply({ decision: 'match', message: 'Check this service.', matches: [card] }).solutions, [card]);
   assert.match(greetingMessage().text, /submit an opportunity at any time/);
 });
+
+test('application help shows a form action only for submission instructions', () => {
+  assert.deepEqual(solutionReply({ decision: 'help', helpTopic: 'submit', message: 'Open the form.' }), {
+    kind: 'help', text: 'Open the form.', showFormAction: true
+  });
+  assert.equal(solutionReply({ decision: 'help', helpTopic: 'tracking', message: 'Use My Opportunities.' }).showFormAction, false);
+  assert.match(greetingMessage().text, /submit or track/);
+});

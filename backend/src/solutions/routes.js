@@ -3,6 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 import { requireRole } from '../middleware/requireRole.js';
 import { normaliseSolutionCheck, requestSolutionCheck } from './check.js';
 import { findPublishedSolutions, publicSolution, searchSolutions } from './queries.js';
+import { applicationHelp } from './help.js';
 
 const noneMessage = 'No suitable verified solution was found in the checked catalogue entries. You can submit an opportunity.';
 const unavailable = {
@@ -37,6 +38,8 @@ export function solutionRoutes(pool, options = {}) {
   router.post('/solutions/check', requireRole('staff', 'manager', 'team'), limiter, express.json({ limit: '32kb' }), async (req, res) => {
     const { fields, text, previousMessages } = validateCheck(req.body);
     if (Object.keys(fields).length) return res.status(400).json({ code: 'VALIDATION_ERROR', message: 'Check the conversation fields.', fields });
+    const help = applicationHelp(text, req.user.role);
+    if (help) return res.json(help);
     const role = req.user.role;
     try {
       const query = [...previousMessages.filter((entry) => entry.role === 'user').map((entry) => entry.text), text].join(' ');

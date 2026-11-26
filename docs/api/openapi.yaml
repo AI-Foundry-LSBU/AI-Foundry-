@@ -26,6 +26,10 @@ info:
     US10 stores existing solutions in a manager-controlled catalogue and grounds
     the pre-submission chatbot in verified, active, accessible catalogue results.
     The chatbot never prevents submission, including after a recommendation or failure.
+    Recognised application-usage questions use reviewed, role-aware server help.
+    All external AI calls (catalogue checking, benefit suggestions and opportunity
+    benefit reviews) use the shared server-side Gemini configuration for private
+    developer experiments. They are disabled in production; manual workflows remain available.
 
     **Sign-in:** provisioned coursework accounts use email and an application
     password. Login creates a PostgreSQL-backed session in the HttpOnly
@@ -79,9 +83,14 @@ paths:
     post:
       tags: [Solutions]
       operationId: checkExistingSolutions
-      summary: Check verified catalogue candidates before submitting (US10)
+      summary: Explain AI Foundry usage or check verified catalogue candidates (US10)
       description: |
-        Uses server-side Gemini for private developer experiments. Search retrieves up to
+        Recognised AI Foundry usage questions return decision=help and a helpTopic
+        from reviewed server instructions, adapted to the signed-in role. These
+        answers need no verified catalogue entries, API key or provider call.
+        They explain the workflow without retrieving personal records or changing data.
+        helpTopic=submit lets the frontend show an Open opportunity form action.
+        Other messages use server-side Gemini for private developer experiments. Search retrieves up to
         eight active, verified candidates available to the caller; if no terms
         match, up to eight available entries form a bounded semantic fallback.
         When no accessible verified entries exist, returns none without calling AI.
@@ -118,7 +127,7 @@ paths:
                   text: Is this a staff meeting room or a student study room?
       responses:
         '200':
-          description: Match, no match or clarification. Staff may always submit anyway.
+          description: Application help, match, no match or clarification. Staff may always submit anyway.
           content:
             application/json:
               schema:
@@ -768,7 +777,9 @@ paths:
       operationId: suggestOpportunityBenefit
       summary: Suggest one benefit from an opportunity description
       description: |
-        Manager only. Reads the opportunity text and returns one draft benefit.
+        Manager only. Reads the opportunity text and returns one draft benefit
+        using the shared server-side Gemini configuration for private experiments.
+        No OpenAI credentials are used. Quota/configuration/production guards return 503.
         Nothing is saved. A manager can review the draft and record it through
         the existing benefit endpoint once the opportunity has a delivery project.
         `estimated` is null when the description does not support a number.
@@ -801,14 +812,14 @@ paths:
                 code: SUGGESTION_FAILED
                 message: The benefit suggestion could not be created.
         '503':
-          description: Benefit suggestions are not configured on the server.
+          description: Gemini is not configured, the model is unsupported, private calls are disabled in production, or quota is exhausted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 code: SUGGESTION_UNAVAILABLE
-                message: Benefit suggestions are not configured.
+                message: Benefit suggestions are not configured or are temporarily unavailable.
 
   /opportunities/{id}/decision:
     parameters:
@@ -1344,7 +1355,11 @@ components:
       properties:
         decision:
           type: string
-          enum: [match, none, clarify, unavailable]
+          enum: [match, none, clarify, help, unavailable]
+        helpTopic:
+          type: string
+          description: Present only for reviewed application-help responses.
+          enum: [overview, opportunity, submit, tracking, statuses, notifications, assessment, projects, benefits, history, catalogue, sign_in]
         question:
           type: string
           nullable: true

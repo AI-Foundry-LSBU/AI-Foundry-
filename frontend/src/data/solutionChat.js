@@ -1,7 +1,7 @@
 export function greetingMessage() {
   return {
     id: 'greeting', role: 'assistant', kind: 'greeting',
-    text: "Hi, I'm Alice. Tell me what you are trying to improve. I'll check verified catalogue entries, and you can submit an opportunity at any time."
+    text: "Hi, I'm Alice. Tell me what you are trying to improve and I'll check verified catalogue entries. I can also explain how to submit or track a request and use AI Foundry. You can submit an opportunity at any time."
   };
 }
 
@@ -23,6 +23,9 @@ export function cardsFor(matches) {
 }
 
 export function solutionReply(result) {
+  if (result.decision === 'help') return {
+    kind: 'help', text: result.message, showFormAction: result.helpTopic === 'submit'
+  };
   const cards = result.decision === 'match' ? cardsFor(result.matches) : [];
   if (cards.length) return { kind: 'found', text: result.message, solutions: cards };
   if (result.decision === 'clarify' && result.question) return { kind: 'clarify', text: result.question };

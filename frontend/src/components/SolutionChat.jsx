@@ -131,7 +131,9 @@ export function SolutionChat({ onContinue }) {
               {solution.accessInstructions && <p>{solution.accessInstructions}</p>}
             </li>)}
           </ul>}
-          {["none", "found"].includes(message.kind) && <Button type="button" onClick={continueToForm}>Submit anyway</Button>}
+          {(["none", "found"].includes(message.kind) || message.showFormAction) && <Button type="button" onClick={continueToForm}>
+            {message.showFormAction ? "Open opportunity form" : "Submit anyway"}
+          </Button>}
         </article>
       </div>)}
       {typing && <div className="solution-turn solution-turn-assistant">
