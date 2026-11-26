@@ -120,6 +120,15 @@ export function suggestOpportunityBenefit(email, id) {
   return request(email, `/opportunities/${encodeURIComponent(id)}/benefit-suggestion`, { method: "POST" });
 }
 
+export async function saveStatedSavings(email, id, stated) {
+  const data = await request(email, `/opportunities/${encodeURIComponent(id)}/stated-savings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(stated),
+  });
+  return toOpportunity(data);
+}
+
 export function submitOpportunity(email, data) {
   return request(email, "/opportunities", {
     method: "POST",

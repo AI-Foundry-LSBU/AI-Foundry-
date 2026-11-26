@@ -4,7 +4,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
   FolderKanban,
   Gauge,
@@ -13,7 +12,6 @@ import {
 import { Navigate, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
-import { progressForDeliveryStatus } from "../data/projectsApi";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { useOpportunities } from "../data/useOpportunities";
@@ -27,16 +25,6 @@ import {
   TableAction,
   formatCurrency
 } from "../components/ui";
-const portfolioStatuses = [
-  "Submitted",
-  "Under Review",
-  "Approved",
-  "Rejected",
-  "In Progress",
-  "Testing",
-  "Completed"
-];
-
 function useRecordedBenefits() {
   const recorded = usePotentialBenefits();
   return {
@@ -52,17 +40,11 @@ function ManagerDashboard() {
   const liveManager = currentUser.role === "Digital Project Manager";
   const live = useOpportunities(liveManager ? currentUser.email : null, "all");
   const delivery = useDeliveryProjects();
-  const recorded = useRecordedBenefits();
   if (live.loading) return <div role="status"><EmptyState title="Loading opportunities…" /></div>;
   if (live.error) return <div role="alert">
       <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
     </div>;
   const opportunities = liveManager ? live.data : samples;
-  const statusCounts = portfolioStatuses.map((status) => ({
-    status,
-    value: opportunities.filter((item) => getOpportunityDisplayStatus(item) === status).length
-  }));
-  const max = Math.max(...statusCounts.map((item) => item.value), 1);
   const submitted = opportunities.filter((item) => item.status === "Submitted").length;
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
   const projects = delivery.data ?? [];
@@ -73,7 +55,6 @@ function ManagerDashboard() {
   return <>
       <PageHeader
     title="Management Dashboard"
-    subtitle="Review opportunities, follow project delivery and track benefits."
     actions={<Button onClick={() => navigate("/opportunities")}>
             Review opportunities <ArrowRight size={16} />
           </Button>}
@@ -159,101 +140,6 @@ function ManagerDashboard() {
           {moreSubmissions > 0 && <p className="list-foot">
               {moreSubmissions} more {moreSubmissions === 1 ? "opportunity is" : "opportunities are"} in All Opportunities.
             </p>}
-        </Card>
-        <Card>
-          <div className="card-header">
-            <div>
-              <h2>Opportunities by status</h2>
-              <p>Current portfolio distribution</p>
-            </div>
-          </div>
-          <div className="bar-chart">
-            {statusCounts.map((item) => <div className="bar-row" key={item.status}>
-                <span>{item.status}</span>
-                <div>
-                  <i
-    style={{
-      width: `${item.value ? Math.max(item.value / max * 100, 8) : 0}%`
-    }}
-  />
-                </div>
-                <strong>{item.value}</strong>
-              </div>)}
-          </div>
-        </Card>
-        <Card className="span-2">
-          <div className="card-header">
-            <div>
-              <h2>Project progress overview</h2>
-              <p>Progress follows the delivery stage</p>
-            </div>
-            <button
-    className="text-button"
-    onClick={() => navigate("/pipeline")}
-  >
-              Open Project Delivery <ArrowRight size={15} />
-            </button>
-          </div>
-          {delivery.loading && <p role="status">Loading projects…</p>}
-          {delivery.error && <div role="alert">
-            <EmptyState title="Could not load projects" text={delivery.error.message} action={<Button onClick={delivery.retry}>Try again</Button>} />
-          </div>}
-          <div className="project-overview">
-            {projects.filter((project) => project.status !== "Completed").slice(0, 3).map((project) => {
-    const progress = progressForDeliveryStatus(project.status);
-    return <button
-      type="button"
-      className="project-progress"
-      key={project.id}
-      onClick={() => navigate(`/projects/${project.id}`)}
-    >
-                  <div>
-                    <strong>{project.title}</strong>
-                    <span>
-                      {project.department} · {project.status}
-                    </span>
-                  </div>
-                  <div className="progress-track">
-                    <i style={{ width: `${progress}%` }} />
-                  </div>
-                  <b>{progress}%</b>
-                </button>;
-  })}
-          </div>
-        </Card>
-        <Card className="benefit-summary">
-          <div className="card-header">
-            <div>
-              <h2>Potential benefits</h2>
-              <p>Estimates from opportunity descriptions, not measured results</p>
-            </div>
-          </div>
-          {recorded.loading && <p role="status">Loading benefits…</p>}
-          {recorded.error && <div role="alert">
-            <EmptyState title="Could not load benefits" text={recorded.error.message} action={<Button onClick={recorded.retry}>Try again</Button>} />
-          </div>}
-          {!recorded.loading && !recorded.error && <>
-            {recorded.hours > 0 && <div className="benefit-highlight">
-              <Clock3 size={20} />
-              <div>
-                <strong>{recorded.hours} hours/month</strong>
-                <span>potential time saved</span>
-              </div>
-            </div>}
-            {recorded.savings > 0 && <div className="benefit-highlight">
-              <CircleDollarSign size={20} />
-              <div>
-                <strong>{formatCurrency(recorded.savings)}/year</strong>
-                <span>potential financial savings</span>
-              </div>
-            </div>}
-            {recorded.hours === 0 && recorded.savings === 0 && <p className="benefit-note">
-              {recorded.reviews.filter((item) => item.recommendation === "worth_pursuing").length} worth pursuing. Hours and savings appear when an opportunity states them.
-            </p>}
-          </>}
-          <Button variant="secondary" onClick={() => navigate("/benefits")}>
-            View benefits
-          </Button>
         </Card>
       </div>
     </>;

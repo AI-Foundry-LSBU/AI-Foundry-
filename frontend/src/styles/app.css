@@ -2815,6 +2815,7 @@ button.project-progress {
 
 .benefit-review h2 {
   margin: 0;
+  padding: 22px 0 28px;
   color: #1c1f3a;
   font: 700 32px/1.15 'Manrope', sans-serif;
 }
@@ -3337,6 +3338,51 @@ button.project-progress {
   font-size: 12px;
 }
 
+.stated-savings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin: 8px 0 18px;
+}
+
+.stated-savings label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  align-items: center;
+}
+
+.stated-savings span,
+.stated-savings small {
+  color: #1c1f3a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stated-savings span { grid-column: 1 / -1; }
+
+.stated-savings input {
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d9d3f2;
+  border-radius: 10px;
+  background: #fff;
+  color: #1c1f3a;
+  font: 700 15px Manrope, sans-serif;
+}
+
+.stated-savings p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.stated-savings .button { grid-column: 1 / -1; justify-self: start; }
+
+@media (max-width: 720px) {
+  .stated-savings { grid-template-columns: 1fr; }
+}
+
 .saving-chart {
   display: flex;
   flex-direction: column;
@@ -3773,3 +3819,158 @@ button.project-progress {
     padding: 16px;
   }
 }
+
+.benefit-report-grid {
+  display: grid;
+  grid-template-columns: 1.2fr .9fr .8fr;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.benefit-report-grid > .card {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #e0e1ed;
+  border-radius: 16px;
+}
+
+.money-scale { padding: 18px 4px 4px; }
+
+.money-scale-track {
+  position: relative;
+  height: 22px;
+  background: #f1f2f8;
+  border-radius: 99px;
+}
+
+.money-scale-track i {
+  display: block;
+  height: 100%;
+  background: #1c7a4a;
+  border-radius: 99px;
+}
+
+.money-scale-track b {
+  position: absolute;
+  top: -6px;
+  width: 3px;
+  height: 34px;
+  background: #1c1f3a;
+  border-radius: 99px;
+}
+
+.money-scale-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: #6d7290;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.money-scale p {
+  margin-top: 14px;
+  color: #1c1f3a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.money-scale-key .money-actual,
+.money-scale-key span:first-child i { background: #1c7a4a; }
+.money-scale-key .money-estimate,
+.money-scale-key span:last-child i { background: #1c1f3a; }
+
+.service-donut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 36px;
+}
+
+.service-donut svg { width: min(100%, 210px); height: auto; }
+
+@media (max-width: 980px) {
+  .benefit-report-grid { grid-template-columns: 1fr; }
+}
+
+.summary-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 4px 4px;
+}
+
+.summary-bar {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-bar span,
+.summary-bar strong {
+  color: #1c1f3a;
+  font-size: 14px;
+}
+
+.summary-bar div {
+  height: 12px;
+  background: #f1f2f8;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.summary-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+}
+
+.summary-estimated { background: #c9cde0; }
+.summary-actual { background: #c44f88; }
+.summary-count { background: #1c1f3a; }
+
+.service-outcome { padding: 4px 4px 8px; }
+
+.service-track {
+  height: 18px;
+  background: #e7e9f2;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.service-track i {
+  display: block;
+  height: 100%;
+  background: #3459c4;
+}
+
+.service-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 12px;
+  color: #3c415c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.service-key span { display: inline-flex; align-items: center; gap: 8px; }
+.service-key i { width: 10px; height: 10px; border-radius: 50%; background: #3459c4; }
+.service-key span:last-child i { background: #e7e9f2; }
+
+.money-scale-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 12px;
+  color: #3c415c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.money-scale-key span { display: inline-flex; align-items: center; gap: 8px; }
+.money-scale-key i { width: 10px; height: 10px; border-radius: 50%; }
+.money-scale-key .money-actual { background: #1c7a4a; }
+.money-scale-key .money-estimate { background: #1c1f3a; }

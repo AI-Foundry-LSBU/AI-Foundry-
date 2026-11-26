@@ -25,13 +25,6 @@ http://localhost:3000/api/v1
 
 Coursework accounts sign in with email and an application password. PostgreSQL stores sessions and password hashes. The old `X-User-Email` header no longer authenticates requests. See [backend setup](backend/README.md) for generating local passwords and upgrading the database.
 
-## GitHub Guidelines
-
-- Use the assigned feature branches, not `main`.
-- Create a pull request before merging changes.
-- Include Jira task IDs in commit messages where possible.
-- Don't commit `node_modules`, `.env` files or sensitive information.
-- Keep documentation and sprint evidence in the relevant folders.
 
 ## Running Locally
 

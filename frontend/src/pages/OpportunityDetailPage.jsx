@@ -8,7 +8,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { categories } from "../data/options";
-import { deleteOpportunity, getOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision } from "../data/opportunitiesApi";
+import { deleteOpportunity, getOpportunity, getOpportunityDisplayStatus, getOpportunityHistory, saveOpportunityAssessment, saveOpportunityDecision, saveStatedSavings } from "../data/opportunitiesApi";
 import { useOpportunities } from "../data/useOpportunities";
 import { claimDeliveryProject, createDeliveryProject, deliveryStatuses, engineerDeliveryStatuses, updateDeliveryProject } from "../data/projectsApi";
 import { BenefitCharts } from "../components/BenefitCharts";
@@ -22,7 +22,7 @@ import {
   StatusBadge
 } from "../components/ui";
 
-function BenefitReview({ review }) {
+function BenefitReview({ review, statedSavings, onSaveStated }) {
   const title = review?.recommendation === "not_worth_it" ? "Not worth pursuing" : review ? "Worth pursuing" : "Benefit review";
   return <Card className="benefit-review">
     <div className="card-header">
@@ -35,7 +35,7 @@ function BenefitReview({ review }) {
       <p className="benefit-summary">{review?.summary ?? "A benefit review has not been prepared for this opportunity."}</p>
       {review?.reason && <p>{review.reason}</p>}
       {review?.similarTitle && <p className="benefit-covered">Already covered by: {review.similarTitle}</p>}
-      {review && <BenefitCharts review={review} />}
+      {review && <BenefitCharts review={review} statedSavings={statedSavings} onSaveStated={onSaveStated} />}
     </div>
   </Card>;
 }
@@ -461,7 +461,14 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
             <p>{opportunity.expectedBenefits}</p>
           </div>}
       </Card>
-      {isLive && isManager && <BenefitReview review={opportunity.benefitReview} />}
+      {isLive && isManager && <BenefitReview
+        review={opportunity.benefitReview}
+        statedSavings={opportunity.statedSavings}
+        onSaveStated={async (stated) => {
+          const saved = await saveStatedSavings(currentUser.email, opportunity.id, stated);
+          setSavedOpportunity(saved);
+        }}
+      />}
       <div className={`detail-grid ${isManager ? "management" : ""}`}>
         <div className="detail-content">
           {isLive && isManager && <Card>

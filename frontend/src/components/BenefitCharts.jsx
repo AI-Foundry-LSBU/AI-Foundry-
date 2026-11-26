@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const benefitCategoryLabels = {
   efficiency: "Efficiency",
   financial: "Cost saving",
@@ -76,26 +78,33 @@ function amountLabel(item) {
   return String(item.estimated);
 }
 
-function savingRows(benefits, worth) {
+function savingRows(benefits, worth, showBlank) {
   const blank = (detail) => [
     { label: "Time saved", detail, width: "0%" },
-    { label: "Cases avoided", detail, width: "0%" },
     { label: "Money saved", detail, width: "0%" }
   ];
   if (!worth) return blank("None");
-  const stated = (benefits ?? []).filter((item) => typeof item.estimated === "number" && item.estimated > 0);
-  if (!stated.length) return blank("Not stated");
+  const stated = (benefits ?? []).filter((item) => typeof item.estimated === "number" && item.estimated >= 0);
+  if (!stated.length) return showBlank ? blank("Not stated") : [];
   const maxByUnit = {};
   for (const item of stated) maxByUnit[item.unit] = Math.max(maxByUnit[item.unit] ?? 0, item.estimated);
   const rows = stated.map((item) => ({
     label: savingName(item),
     detail: amountLabel(item),
-    width: `${Math.max((item.estimated / maxByUnit[item.unit]) * 100, 12)}%`
+    width: item.estimated === 0 ? "0%" : `${Math.max((item.estimated / maxByUnit[item.unit]) * 100, 12)}%`
   }));
-  if (!stated.some((item) => item.unit === "GBP/year" || item.category === "financial")) {
+  if (showBlank && !stated.some((item) => item.unit === "GBP/year" || item.category === "financial")) {
     rows.push({ label: "Money saved", detail: "Not stated", width: "0%" });
   }
-  return rows;
+  return rows.filter((row) => row.label !== "Cases avoided");
+}
+
+function statedBenefitItems(stated) {
+  if (!stated) return [];
+  const items = [];
+  if (allowedAmount(stated.hoursPerMonth)) items.push({ unit: "Hours/month", estimated: stated.hoursPerMonth, category: "efficiency", description: "Time saved" });
+  if (allowedAmount(stated.savingsPerYear)) items.push({ unit: "GBP/year", estimated: stated.savingsPerYear, category: "financial", description: "Money saved" });
+  return items;
 }
 
 function ComparisonLine({ rows }) {
@@ -135,6 +144,80 @@ function ComparisonLine({ rows }) {
   </svg>;
 }
 
+function amountDraft(value) {
+  if (value === "" || value === "0") return true;
+  if (!/^\d+(\.\d*)?$/.test(value) || value.startsWith("0")) return false;
+  const head = value.endsWith(".") ? value.slice(0, -1) : value;
+  return Number(head) >= 1;
+}
+
+function allowedAmount(value) {
+  return typeof value === "number" && (value === 0 || value >= 1);
+}
+
+function StatedSavingsForm({ onSave }) {
+  const [values, setValues] = useState({
+    hoursPerMonth: "",
+    savingsPerYear: ""
+  });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const fields = [
+    ["hoursPerMonth", "Time saved", "hours/month"],
+    ["savingsPerYear", "Money saved", "£/year"]
+  ];
+  const save = async (event) => {
+    event.preventDefault();
+    const payload = {};
+    for (const [key] of fields) {
+      const raw = values[key].trim();
+      if (!raw) {
+        payload[key] = null;
+        continue;
+      }
+      const number = Number(raw);
+      if (raw !== "0" && (!Number.isFinite(number) || number < 1)) {
+        setError("Enter 0, or a number that is at least 1.");
+        return;
+      }
+      payload[key] = raw === "0" ? 0 : Math.round(number * 100) / 100;
+    }
+    setError("");
+    setSaving(true);
+    try {
+      await onSave(payload);
+      setValues({ hoursPerMonth: "", savingsPerYear: "" });
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <form className="stated-savings" onSubmit={save}>
+    {fields.map(([key, label, unit]) => <label key={key}>
+      <span>{label}</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        inputMode="numeric"
+        value={values[key]}
+        placeholder="0"
+        aria-label={label}
+        onKeyDown={(event) => { if (event.key === "-" || event.key === "e") event.preventDefault(); }}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (!amountDraft(next) && next.length >= values[key].length) return;
+          setValues((current) => ({ ...current, [key]: next }));
+        }}
+      />
+      <small>{unit}</small>
+    </label>)}
+    {error && <p role="alert">{error}</p>}
+    <button type="submit" className="button button-secondary" disabled={saving}>{saving ? "Saving…" : "Save amounts"}</button>
+  </form>;
+}
+
 function SavingBars({ rows }) {
   const summary = rows.map((row) => `${row.label}: ${row.detail}`).join(". ");
   return <div className="saving-chart" role="img" aria-label={`Amounts stated. ${summary}.`}>
@@ -146,12 +229,13 @@ function SavingBars({ rows }) {
   </div>;
 }
 
-export function BenefitCharts({ benefits, review }) {
+export function BenefitCharts({ benefits, review, statedSavings, onSaveStated }) {
   const source = review?.benefits ?? benefits ?? [];
   const worth = review?.recommendation !== "not_worth_it";
   const rows = worth ? chartRows(source) : noImprovementRows();
   if (worth && !rows.length) return <p className="benefit-note">No potential benefit was described clearly enough to chart.</p>;
-  const amounts = savingRows(source, worth);
+  const entered = statedBenefitItems(statedSavings);
+  const amounts = entered.length ? savingRows(entered, worth, false) : savingRows(source, worth, !onSaveStated);
   const stated = amounts.some((row) => row.detail !== "None" && row.detail !== "Not stated");
 
   return <div className="benefit-chart-list">
@@ -190,12 +274,15 @@ export function BenefitCharts({ benefits, review }) {
         {!worth
           ? review?.similarTitle
             ? `Nothing extra would be saved. ${review.similarTitle} already covers this work.`
-            : "No time, cases or money would be saved."
-          : stated
-            ? "These are amounts written in the opportunity. They are counted savings, not the scores in the line chart. Money appears only when an amount is stated."
-            : "No hours, cases or money were stated. The line chart is what shows the improvement."}
+            : "No time or money would be saved."
+          : onSaveStated
+            ? "Enter 0, or at least 1, for hours and for money."
+            : stated
+              ? "These are the amounts entered for this opportunity."
+              : "No hours or money were entered."}
       </p>
-      <SavingBars rows={amounts} />
+      {worth && onSaveStated && <StatedSavingsForm onSave={onSaveStated} />}
+      {amounts.length > 0 && <SavingBars rows={amounts} />}
     </section>
     <p className="benefit-note">The line uses estimates from 1 to 5. The bars use only numbers stated in the opportunity.</p>
   </div>;
