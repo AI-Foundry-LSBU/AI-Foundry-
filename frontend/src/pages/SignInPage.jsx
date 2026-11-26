@@ -9,6 +9,11 @@ const passwordKeys = {
   "engineer@lsbu.ac.uk": "DEMO_ENGINEER_PASSWORD"
 };
 
+function homeFor(role) {
+  if (role === "Digital Project Manager" || role === "AI Foundry Engineer") return "/dashboard";
+  return "/opportunities";
+}
+
 function OrgIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1c1f3a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="9" y="3" width="6" height="5" rx="1" />
@@ -27,7 +32,7 @@ export function SignInPage() {
   const [error, setError] = useState("");
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const passwordKey = passwordKeys[email.trim().toLowerCase()];
-  if (isAuthenticated) return <Navigate to={currentUser.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities"} replace />;
+  if (isAuthenticated) return <Navigate to={homeFor(currentUser.role)} replace />;
   const submit = async (event) => {
     event.preventDefault();
     if (isSubmitting) return;
@@ -39,7 +44,7 @@ export function SignInPage() {
     setIsSubmitting(true);
     try {
       const user = await signIn(email, password);
-      navigate(user.role === "AI Foundry Engineer" ? "/pipeline" : "/opportunities");
+      navigate(homeFor(user.role));
     } catch (signInError) {
       setError(signInError.message);
     } finally {

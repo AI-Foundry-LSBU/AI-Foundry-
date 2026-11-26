@@ -1,8 +1,8 @@
 import { requestBenefitSuggestion } from '../benefits/suggest.js';
 import { normaliseAssessment } from '../benefits/review.js';
 import { lsbuContextVersion } from '../benefits/university.js';
-import { benefitReviewContext, deleteOpportunity, findOpportunities, findOpportunity, findOpportunityHistory, insertOpportunity, listBenefitReviews, saveAssessment, saveBenefitReview, saveDecision, saveReviewAssessment } from './queries.js';
-import { validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
+import { benefitReviewContext, deleteOpportunity, findOpportunities, findOpportunity, findOpportunityHistory, insertOpportunity, listBenefitReviews, saveAssessment, saveBenefitReview, saveDecision, saveReviewAssessment, updateStatedSavings } from './queries.js';
+import { readStatedSavings, validateAssessment, validateDecision, validateListQuery, validateOpportunityFilters, validateSubmission } from './validation.js';
 import { canReadOpportunity } from '../auth/permissions.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
@@ -43,6 +43,7 @@ function opportunityResponse(row, submitterName) {
     problemDescription: row.problem_description,
     proposedImprovement: row.proposed_improvement,
     expectedBenefits: row.expected_benefits ?? undefined,
+    statedSavings: statedSavingsResponse(row),
     status: row.status,
     deliveryStatus: row.delivery_status ?? undefined,
     priority: row.priority ?? undefined,
@@ -66,6 +67,21 @@ function opportunityResponse(row, submitterName) {
     assessment: assessmentResponse(row),
     decision: decisionResponse(row)
   };
+}
+
+function statedNumber(value) {
+  if (value == null) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function statedSavingsResponse(row) {
+  const statedSavings = {
+    hoursPerMonth: statedNumber(row.stated_hours_per_month),
+    casesPerMonth: statedNumber(row.stated_cases_per_month),
+    savingsPerYear: statedNumber(row.stated_savings_per_year)
+  };
+  return Object.values(statedSavings).some((value) => value !== undefined) ? statedSavings : undefined;
 }
 
 function invalidRequest(res, fields) {
@@ -217,6 +233,21 @@ export function getOpportunity(pool, options = {}) {
       row = await attachBenefitReview(pool, row, options.reviewBenefit, req.user);
     }
 
+    return res.json(opportunityResponse(row, row.submitter_name));
+  };
+}
+
+export function saveOpportunitySavings(pool) {
+  return async (req, res) => {
+    if (req.user.role !== 'manager') return forbidden(res);
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return invalidRequest(res, { body: 'Send a JSON object.' });
+    const fields = {};
+    const data = readStatedSavings(req.body, fields);
+    if (Object.keys(fields).length) return invalidRequest(res, fields);
+
+    const { id } = req.params;
+    const row = uuidPattern.test(id) ? await updateStatedSavings(pool, id, data) : undefined;
+    if (!row) return res.status(404).json({ code: 'NOT_FOUND', message: 'Opportunity not found.' });
     return res.json(opportunityResponse(row, row.submitter_name));
   };
 }

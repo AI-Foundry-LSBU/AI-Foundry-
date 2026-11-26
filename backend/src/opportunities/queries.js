@@ -5,8 +5,9 @@ export async function insertOpportunity(pool, userId, data) {
     `WITH created AS (
        INSERT INTO opportunities (
          submitted_by, title, department, problem_description, proposed_improvement,
-         expected_benefits, source, hackathon_name
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         expected_benefits, source, hackathon_name,
+         stated_hours_per_month, stated_cases_per_month, stated_savings_per_year
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *
      ), logged AS (
        INSERT INTO opportunity_history (
@@ -19,11 +20,26 @@ export async function insertOpportunity(pool, userId, data) {
      SELECT o.* FROM created o JOIN logged h ON h.opportunity_id = o.id`,
     [
       userId, data.title, data.department, data.problemDescription, data.proposedImprovement,
-      data.expectedBenefits, data.source, data.hackathonName
+      data.expectedBenefits, data.source, data.hackathonName,
+      data.hoursPerMonth ?? null, data.casesPerMonth ?? null, data.savingsPerYear ?? null
     ]
   );
 
   return rows[0];
+}
+
+export async function updateStatedSavings(pool, id, data) {
+  const { rowCount } = await pool.query(
+    `UPDATE opportunities
+     SET stated_hours_per_month = $2,
+         stated_cases_per_month = $3,
+         stated_savings_per_year = $4,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [id, data.hoursPerMonth, data.casesPerMonth, data.savingsPerYear]
+  );
+  if (rowCount !== 1) return undefined;
+  return findOpportunity(pool, id);
 }
 
 const priorityRank = "CASE priority WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 END";

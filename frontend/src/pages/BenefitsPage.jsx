@@ -7,12 +7,9 @@ import {
   Filter,
   Plus
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { BenefitCharts } from "../components/BenefitCharts";
 import { useApp } from "../context/AppContext";
 import { saveBenefit } from "../data/benefitsApi";
 import { useBenefits } from "../data/useBenefits";
-import { usePotentialBenefits } from "../data/usePotentialBenefits";
 import { useDeliveryProjects } from "../data/useDeliveryProjects";
 import {
   Button,
@@ -26,52 +23,152 @@ import {
   formatMeasure
 } from "../components/ui";
 
-function PotentialBenefits() {
-  const navigate = useNavigate();
-  const reviews = usePotentialBenefits();
-  if (reviews.loading) return <div role="status"><EmptyState title="Loading potential benefits…" /></div>;
-  if (reviews.error) return <div role="alert"><EmptyState title="Could not load potential benefits" text={reviews.error.message} action={<Button onClick={reviews.retry}>Try again</Button>} /></div>;
-  const worth = reviews.reviews;
-  const charted = reviews.benefits.filter((item) => item.estimated != null);
-  const max = Math.max(...charted.map((item) => item.estimated), 1);
+function amount(value) {
+  return Number(value) || 0;
+}
+
+function whole(value) {
+  return Number(value).toLocaleString("en-GB", { maximumFractionDigits: 1 });
+}
+
+function CompletedSummary() {
+  const records = useBenefits();
+  const delivery = useDeliveryProjects();
+  if (records.loading || delivery.loading) return <div role="status"><EmptyState title="Loading benefits…" /></div>;
+  const loadError = records.error ?? delivery.error;
+  if (loadError) return <div role="alert"><EmptyState title="Could not load benefits" text={loadError.message} action={<Button onClick={() => { records.retry(); delivery.retry(); }}>Try again</Button>} /></div>;
+
+  const completed = (delivery.data ?? []).filter((project) => project.status === "Completed");
+  const completedIds = new Set(completed.map((project) => project.id));
+  const benefits = (records.data ?? []).filter((item) => completedIds.has(item.projectId));
+  const sum = (unit, key) => benefits.filter((item) => item.unit === unit).reduce((total, item) => total + amount(item[key]), 0);
+  const hoursActual = sum("Hours/month", "actual");
+  const hoursEstimated = sum("Hours/month", "estimated");
+  const moneyActual = sum("GBP/year", "actual");
+  const moneyEstimated = sum("GBP/year", "estimated");
+  const improved = (category) => new Set(benefits.filter((item) => item.category === category && amount(item.actual) > 0).map((item) => item.projectId)).size;
+  const serviceYes = improved("Service");
+  const serviceNo = Math.max(completed.length - serviceYes, 0);
+
   return <>
-    <PageHeader
-      title="Potential benefits"
-      subtitle="Estimates taken from each opportunity. These are not measured results."
-    />
-    <div className="stats-grid three">
-      <StatCard label="Worth pursuing" value={reviews.reviews.filter((item) => item.recommendation === "worth_pursuing").length} icon={CheckCircle2} tone="green" />
-      <StatCard label="Benefit measures" value={reviews.benefits.length} detail="Compared on each opportunity" icon={BriefcaseBusiness} tone="violet" />
-      {reviews.hours > 0 && <StatCard label="Potential hours" value={`${reviews.hours} hours/month`} icon={Clock3} tone="blue" />}
-      {reviews.savings > 0 && <StatCard label="Potential savings" value={`${formatCurrency(reviews.savings)}/year`} icon={CircleDollarSign} tone="blue" />}
-    </div>
-    {worth.map((review) => <Card key={review.opportunityId}>
-      <div className="card-header">
-        <div>
-          <h2>{review.title}</h2>
-          <p>{review.department}</p>
-        </div>
-        <Button variant="secondary" onClick={() => navigate(`/opportunities/${review.opportunityId}`)}>Open opportunity</Button>
+    <PageHeader title="Benefits Reporting" />
+    {!completed.length ? <EmptyState title="No completed opportunities yet" text="Totals appear here after a delivered project is completed." /> : <>
+      <div className="stats-grid four">
+        <StatCard label="Completed opportunities" value={completed.length} detail="Included in this summary" icon={CheckCircle2} tone="amber" />
+        <StatCard label="Time saved" value={`${whole(hoursActual)} hours/month`} detail={`${whole(hoursEstimated)} hours/month were estimated`} icon={Clock3} tone="violet" />
+        <StatCard label="Money saved" value={`${formatCurrency(moneyActual)}/year`} detail={`${formatCurrency(moneyEstimated)}/year were estimated`} icon={CircleDollarSign} tone="green" />
+        <StatCard label="Better service" value={`${serviceYes} of ${completed.length}`} detail={serviceNo ? `${serviceNo} did not improve service` : "Every completed opportunity improved service"} icon={BriefcaseBusiness} tone="blue" />
       </div>
-      <BenefitCharts review={review} />
-    </Card>)}
-    {charted.length > 0 && <Card>
-      <div className="card-header">
-        <div>
-          <h2>Estimated quantities</h2>
-          <p>Only numbers stated in the opportunity are included</p>
-        </div>
+      <div className="benefit-report-grid">
+        <Card>
+          <div className="card-header">
+            <div>
+              <h2>Time saved</h2>
+            </div>
+          </div>
+          <TimeColumns estimated={hoursEstimated} actual={hoursActual} />
+        </Card>
+        <Card>
+          <div className="card-header">
+            <div>
+              <h2>Money saved</h2>
+            </div>
+          </div>
+          <MoneyScale estimated={moneyEstimated} actual={moneyActual} />
+        </Card>
+        <Card>
+          <div className="card-header">
+            <div>
+              <h2>Better service</h2>
+              <p>Share of completed opportunities</p>
+            </div>
+          </div>
+          <ServiceDonut yes={serviceYes} total={completed.length} />
+        </Card>
       </div>
-      <div className="bar-chart">
-        {charted.map((item) => <div className="bar-row" key={`${item.category}-${item.description}`}>
-          <span>{item.description}</span>
-          <div><i style={{ width: `${Math.max(item.estimated / max * 100, 8)}%` }} /></div>
-          <strong>{item.estimated} {item.unit}</strong>
-        </div>)}
-      </div>
-    </Card>}
-    {!worth.length && <EmptyState title="No potential benefits yet" text="A comparison appears when an opportunity has a benefit review." />}
+    </>}
   </>;
+}
+
+function TimeColumns({ estimated, actual }) {
+  const width = 420;
+  const height = 250;
+  const pad = { l: 46, r: 18, t: 26, b: 40 };
+  const ceiling = Math.max(estimated, actual, 1);
+  const top = Math.ceil(ceiling / 20) * 20;
+  const innerH = height - pad.t - pad.b;
+  const innerW = width - pad.l - pad.r;
+  const yAt = (value) => pad.t + (1 - value / top) * innerH;
+  const barWidth = 72;
+  const gap = 64;
+  const origin = pad.l + (innerW - barWidth * 2 - gap) / 2;
+  const bars = [
+    { label: "Estimated", value: estimated, x: origin, fill: "#c9cde0" },
+    { label: "Actual", value: actual, x: origin + barWidth + gap, fill: "#c44f88" }
+  ];
+  const ticks = [0, top / 2, top];
+  return <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Time saved. Estimated ${whole(estimated)} hours per month. Actual ${whole(actual)} hours per month.`}>
+    {ticks.map((tick) => <g key={tick}>
+      <line x1={pad.l} x2={width - pad.r} y1={yAt(tick)} y2={yAt(tick)} stroke="#eceef5" />
+      <text className="chart-tick" x={pad.l - 8} y={yAt(tick) + 4} textAnchor="end">{whole(tick)}</text>
+    </g>)}
+    <text className="chart-tick" x="14" y={pad.t + innerH / 2} textAnchor="middle" transform={`rotate(-90 14 ${pad.t + innerH / 2})`}>Hours</text>
+    {bars.map((bar) => <g key={bar.label}>
+      <rect x={bar.x} y={yAt(bar.value)} width={barWidth} height={Math.max(yAt(0) - yAt(bar.value), 0)} rx="8" fill={bar.fill} />
+      <text className="chart-label" x={bar.x + barWidth / 2} y={yAt(bar.value) - 8} textAnchor="middle">{whole(bar.value)}</text>
+      <text className="chart-label" x={bar.x + barWidth / 2} y={height - 12} textAnchor="middle">{bar.label}</text>
+    </g>)}
+  </svg>;
+}
+
+function moneyTop(value) {
+  const step = value > 5000 ? 2000 : value > 500 ? 100 : 20;
+  return Math.max(Math.ceil(value / step) * step, step);
+}
+
+function MoneyScale({ estimated, actual }) {
+  const top = moneyTop(Math.max(estimated, actual, 1));
+  const place = (value) => `${Math.min(value / top * 100, 100)}%`;
+  const difference = actual - estimated;
+  const comparison = difference === 0
+    ? "The amount saved matches the estimate."
+    : difference > 0
+      ? `${formatCurrency(difference)} a year more than the estimate.`
+      : `${formatCurrency(Math.abs(difference))} a year less than the estimate.`;
+  return <div className="money-scale" role="img" aria-label={`Money saved. Actual ${formatCurrency(actual)} a year. Estimated ${formatCurrency(estimated)} a year. ${comparison}`}>
+    <div className="money-scale-track">
+      <i style={{ width: place(actual) }} />
+      <b style={{ left: place(estimated) }} />
+    </div>
+    <div className="money-scale-axis">
+      <span>£0</span>
+      <span>{formatCurrency(top)}</span>
+    </div>
+    <div className="money-scale-key">
+      <span><i className="money-actual" /> Actual {formatCurrency(actual)}/year</span>
+      <span><i className="money-estimate" /> Estimate {formatCurrency(estimated)}/year</span>
+    </div>
+    <p>{comparison}</p>
+  </div>;
+}
+
+function ServiceDonut({ yes, total }) {
+  const no = Math.max(total - yes, 0);
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const yesLength = total ? (yes / total) * circumference : 0;
+  return <div className="service-donut">
+    <svg viewBox="0 0 160 160" role="img" aria-label={`${yes} of ${total} completed opportunities improved the service. ${no} did not.`}>
+      <circle cx="80" cy="80" r={radius} fill="none" stroke="#e7e9f2" strokeWidth="18" />
+      <circle cx="80" cy="80" r={radius} fill="none" stroke="#3459c4" strokeWidth="18" strokeDasharray={`${yesLength} ${circumference - yesLength}`} transform="rotate(-90 80 80)" />
+      <text className="chart-label" x="80" y="78" textAnchor="middle">{yes} of {total}</text>
+      <text className="chart-tick" x="80" y="98" textAnchor="middle">improved</text>
+    </svg>
+    <div className="service-key">
+      <span><i /> Improved service · {yes}</span>
+      <span><i /> No service change · {no}</span>
+    </div>
+  </div>;
 }
 
 export function BenefitsPage() {
@@ -103,7 +200,7 @@ export function BenefitsPage() {
       title="Access restricted"
       text="Benefits Reporting is available to the AI Foundry team."
     />;
-  if (records.isLive) return <PotentialBenefits />;
+  if (records.isLive) return <CompletedSummary />;
   if (records.loading || delivery.loading) return <div role="status">
     <EmptyState title="Loading benefits…" />
   </div>;
