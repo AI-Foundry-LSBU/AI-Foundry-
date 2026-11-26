@@ -102,8 +102,8 @@ function savingRows(benefits, worth, showBlank) {
 function statedBenefitItems(stated) {
   if (!stated) return [];
   const items = [];
-  if (typeof stated.hoursPerMonth === "number") items.push({ unit: "Hours/month", estimated: stated.hoursPerMonth, category: "efficiency", description: "Time saved" });
-  if (typeof stated.savingsPerYear === "number") items.push({ unit: "GBP/year", estimated: stated.savingsPerYear, category: "financial", description: "Money saved" });
+  if (allowedAmount(stated.hoursPerMonth)) items.push({ unit: "Hours/month", estimated: stated.hoursPerMonth, category: "efficiency", description: "Time saved" });
+  if (allowedAmount(stated.savingsPerYear)) items.push({ unit: "GBP/year", estimated: stated.savingsPerYear, category: "financial", description: "Money saved" });
   return items;
 }
 
@@ -151,14 +151,14 @@ function amountDraft(value) {
   return Number(head) >= 1;
 }
 
-function amountField(value) {
-  return typeof value === "number" ? String(value) : "";
+function allowedAmount(value) {
+  return typeof value === "number" && (value === 0 || value >= 1);
 }
 
-function StatedSavingsForm({ stated, onSave }) {
+function StatedSavingsForm({ onSave }) {
   const [values, setValues] = useState({
-    hoursPerMonth: amountField(stated?.hoursPerMonth),
-    savingsPerYear: amountField(stated?.savingsPerYear)
+    hoursPerMonth: "",
+    savingsPerYear: ""
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -186,6 +186,7 @@ function StatedSavingsForm({ stated, onSave }) {
     setSaving(true);
     try {
       await onSave(payload);
+      setValues({ hoursPerMonth: "", savingsPerYear: "" });
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -201,6 +202,7 @@ function StatedSavingsForm({ stated, onSave }) {
         step="1"
         inputMode="numeric"
         value={values[key]}
+        placeholder="0"
         aria-label={label}
         onKeyDown={(event) => { if (event.key === "-" || event.key === "e") event.preventDefault(); }}
         onChange={(event) => {
@@ -279,7 +281,7 @@ export function BenefitCharts({ benefits, review, statedSavings, onSaveStated })
               ? "These are the amounts entered for this opportunity."
               : "No hours or money were entered."}
       </p>
-      {worth && onSaveStated && <StatedSavingsForm stated={statedSavings} onSave={onSaveStated} />}
+      {worth && onSaveStated && <StatedSavingsForm onSave={onSaveStated} />}
       {amounts.length > 0 && <SavingBars rows={amounts} />}
     </section>
     <p className="benefit-note">The line uses estimates from 1 to 5. The bars use only numbers stated in the opportunity.</p>
