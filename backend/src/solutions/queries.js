@@ -2,13 +2,15 @@ import { searchTerms } from './validation.js';
 
 // Publication and visibility are enforced in SQL before any result leaves the server.
 export async function searchSolutions(pool, { role, q = '', limit = 20, state = 'all', management = false }) {
-  const terms = searchTerms(q);
+  const terms = management ? [] : searchTerms(q);
+  const phrase = management ? q.trim().toLowerCase() : '';
   const { rows } = await pool.query(`
     SELECT s.*, s.updated_at::text AS content_version, count(*) OVER ()::integer AS total_count,
       (SELECT count(*) FROM unnest($1::text[]) term
        WHERE strpos(lower(s.name || ' ' || s.description || ' ' || array_to_string(s.keywords, ' ')), term) > 0) AS relevance
     FROM solution_catalogue s
     WHERE ($2::boolean OR (s.active AND s.verified AND (s.visibility = 'all_users' OR $3 = 'manager')))
+      AND ($6 = '' OR strpos(lower(s.name || ' ' || s.description || ' ' || array_to_string(s.keywords, ' ')), $6) > 0)
       AND (cardinality($1::text[]) = 0 OR EXISTS (
         SELECT 1 FROM unnest($1::text[]) term
         WHERE strpos(lower(s.name || ' ' || s.description || ' ' || array_to_string(s.keywords, ' ')), term) > 0
@@ -16,7 +18,7 @@ export async function searchSolutions(pool, { role, q = '', limit = 20, state = 
       AND ($4 = 'all' OR ($4 = 'verified' AND s.verified AND s.active)
         OR ($4 = 'draft' AND NOT s.verified AND s.active) OR ($4 = 'archived' AND NOT s.active))
     ORDER BY relevance DESC, lower(s.name), s.id LIMIT $5`,
-  [terms, management && role === 'manager', role, state, limit]);
+  [terms, management && role === 'manager', role, state, limit, phrase]);
   return { rows, total: rows[0]?.total_count ?? 0 };
 }
 

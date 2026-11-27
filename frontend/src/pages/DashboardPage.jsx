@@ -45,7 +45,6 @@ function ManagerDashboard() {
       <EmptyState title="Could not load opportunities" text={live.error.message} action={<Button onClick={live.retry}>Try again</Button>} />
     </div>;
   const opportunities = liveManager ? live.data : samples;
-  const submitted = opportunities.filter((item) => item.status === "Submitted").length;
   const underReview = opportunities.filter((item) => item.status === "Under Review").length;
   const projects = delivery.data ?? [];
   const activeProjects = projects.filter((item) => item.status !== "Completed");
@@ -70,7 +69,7 @@ function ManagerDashboard() {
         <StatCard
     label="Under Review"
     value={underReview}
-    detail={`${submitted} submitted`}
+    detail="Waiting for a decision"
     icon={Clock3}
     tone="amber"
   />

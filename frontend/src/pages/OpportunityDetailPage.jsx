@@ -325,9 +325,9 @@ function OpportunityDetail({ initialOpportunity, isLive }) {
     }
   };
   return <div className="opportunity-detail">
-      <button className="back-link" onClick={() => navigate("/opportunities")}>
+      <button className="back-link" onClick={() => navigate(isStaff && displayStatus === "Completed" ? "/completed" : "/opportunities")}>
         <ArrowLeft size={17} /> Back to{" "}
-        {isStaff ? "my opportunities" : isEngineer ? "approved opportunities" : "all opportunities"}
+        {isStaff && displayStatus === "Completed" ? "completed" : isStaff ? "my opportunities" : isEngineer ? "approved opportunities" : "all opportunities"}
       </button>
       <div className="detail-heading">
         <div>

@@ -22,6 +22,7 @@ export const router = createBrowserRouter([
       { path: "dashboard", Component: DashboardPage },
       { path: "submit", Component: SubmitPage },
       { path: "opportunities", Component: OpportunitiesPage },
+      { path: "completed", Component: OpportunitiesPage },
       { path: "opportunities/:id", Component: OpportunityDetailPage },
       { path: "pipeline", Component: PipelinePage },
       { path: "history", Component: HistoryPage },
