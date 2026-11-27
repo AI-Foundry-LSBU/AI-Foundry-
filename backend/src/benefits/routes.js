@@ -12,10 +12,12 @@ function benefitResponse(row) {
     category: row.category,
     description: row.description,
     measurement: row.measurement,
-    estimated: Number(row.estimated),
-    actual: Number(row.actual),
+    estimated: row.estimated === null ? null : Number(row.estimated),
+    actual: row.actual === null ? null : Number(row.actual),
     unit: row.unit,
     date: row.date,
+    recurrence: row.recurrence,
+    recursUntil: row.recurs_until,
     notes: row.notes ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -71,7 +73,9 @@ export function benefitRoutes(pool) {
   router.put('/benefits/:id', write, json, async (req, res) => {
     const { id } = req.params;
     if (!uuidPattern.test(id)) return notFound(res);
-    const { data, fields } = validateBenefit(req.body);
+    const current = await findBenefit(pool, id);
+    if (!current) return notFound(res);
+    const { data, fields } = validateBenefit(req.body, current);
     if (Object.keys(fields).length) return invalid(res, fields);
     if (!await replaceBenefit(pool, id, req.user.id, data)) return notFound(res);
     return res.json(benefitResponse(await findBenefit(pool, id)));

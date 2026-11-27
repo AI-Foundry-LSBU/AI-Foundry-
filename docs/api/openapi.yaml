@@ -1897,6 +1897,11 @@ components:
           type: string
           format: date
           nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Actual recorded completion transition, preserved on later edits. Legacy dates without a reliable history event remain null.
         createdAt:
           type: string
           format: date-time
@@ -1958,6 +1963,13 @@ components:
     BenefitInput:
       type: object
       required: [projectId, category, description, measurement, estimated, actual, unit, date]
+      description: |
+        Estimated and actual must be supplied; explicit null means not recorded.
+        New records default to recurrence=unspecified until classified. On PUT,
+        omitted recurrence/recursUntil preserve the existing schedule.
+        Monthly requires Hours/month or Cases/month; yearly requires GBP/year.
+        Recurring records require an inclusive recursUntil on/after date.
+        One-off and unspecified records require recursUntil=null.
       properties:
         projectId:
           type: string
@@ -1982,16 +1994,26 @@ components:
         date:
           type: string
           format: date
+        recurrence:
+          type: string
+          enum: [unspecified, one_off, monthly, yearly]
+          description: Explicit recognition rule; never inferred from the unit. Defaults to unspecified on creation.
+        recursUntil:
+          type: string
+          format: date
+          nullable: true
+          description: Inclusive last recurrence date; required for monthly/yearly and null otherwise.
         notes:
           type: string
           maxLength: 2000
 
     BenefitValue:
       type: number
+      nullable: true
       minimum: -999999999.9999
       maximum: 999999999.9999
       multipleOf: 0.0001
-      description: A signed value with up to four decimal places. Zero is a valid recorded value.
+      description: A signed value with up to four decimal places, or null when not recorded. Explicit zero is a recorded zero, not a missing measurement.
 
     Benefit:
       allOf:
@@ -2046,10 +2068,28 @@ components:
           description: Projects with benefits, ordered by project ID.
           items:
             $ref: '#/components/schemas/ProjectBenefitsSummary'
+        missingValues:
+          type: array
+          description: Present when any saved value is null. Legacy totals sum known values only and are not complete measured totals when this list is nonempty.
+          items:
+            type: object
+            required: [id, projectId, unit, estimatedMissing, actualMissing]
+            properties:
+              id: {type: string, format: uuid}
+              projectId: {type: string, format: uuid}
+              unit: {type: string}
+              estimatedMissing: {type: boolean}
+              actualMissing: {type: boolean}
         message:
           type: string
           nullable: true
           description: No benefits have been recorded yet, or null when records exist.
+
+    NullableBenefitDecimal:
+      type: string
+      nullable: true
+      pattern: '^-?[0-9]+\.[0-9]{4}$'
+      description: Exact four-place decimal, or null when not recorded.
 
     BenefitDecimal:
       type: string
@@ -2119,9 +2159,9 @@ components:
           type: string
           enum: [Percent, Days]
         estimated:
-          $ref: '#/components/schemas/BenefitDecimal'
+          $ref: '#/components/schemas/NullableBenefitDecimal'
         actual:
-          $ref: '#/components/schemas/BenefitDecimal'
+          $ref: '#/components/schemas/NullableBenefitDecimal'
         date:
           type: string
           format: date
