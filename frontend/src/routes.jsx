@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { BenefitsPage } from "./pages/BenefitsPage";
+import { CataloguePage } from "./pages/CataloguePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "history", Component: HistoryPage },
       { path: "projects/:id", Component: ProjectDetailPage },
       { path: "benefits", Component: BenefitsPage },
+      { path: "catalogue", Component: CataloguePage },
       { path: "*", Component: NotFoundPage },
     ],
   },
