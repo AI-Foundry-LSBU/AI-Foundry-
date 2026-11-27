@@ -281,7 +281,7 @@ test('database setup can be rerun without replacing demo users or reapplying the
   assert.deepEqual(after, before);
   const { rows } = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
   assert.deepEqual(rows.map(({ filename }) => filename), [
-    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql', '011_approved_projects.sql', '012_assignment_and_estimates.sql', '013_automatic_assessment.sql', '014_university_context.sql', '015_notification_events.sql', '016_notification_generation.sql', '017_solution_catalogue.sql', '017_stated_savings.sql'
+    '001_initial.sql', '002_opportunity_assessments.sql', '003_opportunity_decisions.sql', '004_project_delivery.sql', '005_project_benefits.sql', '006_authentication.sql', '007_notifications.sql', '007_opportunity_history.sql', '008_notification_statuses.sql', '011_approved_projects.sql', '012_assignment_and_estimates.sql', '013_automatic_assessment.sql', '014_university_context.sql', '015_notification_events.sql', '016_notification_generation.sql', '017_solution_catalogue.sql', '017_stated_savings.sql', '018_dated_benefit_reporting.sql'
   ]);
 });
 
@@ -601,7 +601,7 @@ test('US05 rejects invalid benefit fields and missing records without losing a s
     request(server, path, { email: manager, body, method });
   for (const fields of [
     { description: ' ' }, { measurement: '' }, { category: 'unknown' }, { unit: 'minutes' },
-    { estimated: '2.25' }, { actual: null }, { actual: 1e20 }, { actual: 0.00001 },
+    { estimated: '2.25' }, { actual: undefined }, { actual: 1e20 }, { actual: 0.00001 },
     { date: '2026-02-30' }, { date: '11/11/2026' }, { notes: '\0' },
     { projectId: 'not-a-uuid' }, { description: 'a'.repeat(2001) }
   ]) {

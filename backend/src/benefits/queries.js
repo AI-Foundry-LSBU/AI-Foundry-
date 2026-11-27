@@ -1,5 +1,5 @@
 const benefitSelect = `
-  SELECT b.*, b.recorded_on::text AS date, o.title AS project_title
+  SELECT b.*, b.recorded_on::text AS date, b.recurs_until::text AS recurs_until, o.title AS project_title
   FROM project_benefits b
   JOIN projects p ON p.id = b.project_id
   JOIN opportunities o ON o.id = p.opportunity_id
@@ -18,6 +18,32 @@ export async function benefitSummaryRecords(pool) {
         FROM (${benefitSelect}) saved
       ), '[]'::jsonb) AS benefits
   `);
+  return result;
+}
+
+export async function benefitReportingRecords(pool, projectId) {
+  // All inputs come from one snapshot. Both joins are one-to-one. Progress
+  // notes/history must not be joined here or each benefit could be multiplied.
+  const { rows: [result] } = await pool.query(`
+    WITH completed AS (
+      SELECT p.id, p.status, o.title AS project,
+        (p.completed_at AT TIME ZONE 'UTC')::date::text AS completed_on
+      FROM projects p JOIN opportunities o ON o.id = p.opportunity_id
+      WHERE p.status = 'completed' AND ($1::uuid IS NULL OR p.id = $1)
+    )
+    SELECT
+      ($1::uuid IS NULL OR EXISTS (SELECT 1 FROM projects WHERE id = $1)) AS project_exists,
+      COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM completed p), '[]'::jsonb) AS projects,
+      COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', b.id, 'project_id', b.project_id, 'category', b.category,
+          'description', b.description, 'measurement', b.measurement,
+          'estimated', b.estimated::text, 'actual', b.actual::text,
+          'unit', b.unit, 'date', b.recorded_on::text,
+          'recurrence', b.recurrence, 'recurs_until', b.recurs_until::text
+        ) ORDER BY b.id)
+        FROM project_benefits b JOIN completed p ON p.id = b.project_id
+      ), '[]'::jsonb) AS benefits`, [projectId ?? null]);
   return result;
 }
 
@@ -40,14 +66,15 @@ export async function insertBenefit(pool, userId, data) {
   const { rows } = await pool.query(
     `INSERT INTO project_benefits (
        project_id, category, description, measurement, estimated, actual,
-       unit, recorded_on, notes, created_by, updated_by
+       unit, recorded_on, notes, created_by, updated_by, recurrence, recurs_until
      )
-     SELECT id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10
+     SELECT id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12::date
      FROM projects WHERE id = $1
      RETURNING id`,
     [
       data.projectId, data.category, data.description, data.measurement,
-      data.estimated, data.actual, data.unit, data.date, data.notes || null, userId
+      data.estimated, data.actual, data.unit, data.date, data.notes || null, userId,
+      data.recurrence, data.recursUntil
     ]
   );
   return rows[0]?.id;
@@ -58,13 +85,15 @@ export async function replaceBenefit(pool, id, userId, data) {
     `UPDATE project_benefits b
      SET project_id = p.id, category = $3, description = $4, measurement = $5,
          estimated = $6, actual = $7, unit = $8, recorded_on = $9, notes = $10,
-         updated_by = $11, updated_at = clock_timestamp()
+         updated_by = $11, recurrence = $12, recurs_until = $13::date,
+         updated_at = clock_timestamp()
      FROM projects p
      WHERE b.id = $1 AND p.id = $2
      RETURNING b.id`,
     [
       id, data.projectId, data.category, data.description, data.measurement,
-      data.estimated, data.actual, data.unit, data.date, data.notes || null, userId
+      data.estimated, data.actual, data.unit, data.date, data.notes || null, userId,
+      data.recurrence, data.recursUntil
     ]
   );
   return rowCount === 1;
