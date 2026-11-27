@@ -17,6 +17,7 @@ function projectResponse(row) {
     progress: row.progress,
     startDate: row.start_date,
     targetDate: row.target_date,
+    completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     notes: row.notes,

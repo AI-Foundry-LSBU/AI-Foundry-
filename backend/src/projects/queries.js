@@ -1,5 +1,5 @@
 const projectFields = `
-  p.id, p.opportunity_id, p.status, p.progress, p.created_at, p.updated_at,
+  p.id, p.opportunity_id, p.status, p.progress, p.created_at, p.updated_at, p.completed_at,
   p.start_date::text AS start_date, p.target_date::text AS target_date,
   p.assigned_to AS assignee_id, assignee.name AS assignee_name,
   o.title, o.department, o.priority, o.proposed_improvement AS description
