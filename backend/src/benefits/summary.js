@@ -1,18 +1,6 @@
-// Values from PostgreSQL numeric(13,4) remain strings until calculation.
-// Integer ten-thousandths avoid floating-point errors such as 0.1 + 0.2.
+import { scaled, decimal } from './decimal.js';
+
 const additiveUnits = ['Hours/month', 'GBP/year', 'Cases/month'];
-
-function scaled(value) {
-  const negative = value.startsWith('-');
-  const [whole, fraction = ''] = value.replace(/^-/, '').split('.');
-  const amount = BigInt(whole) * 10000n + BigInt(fraction.padEnd(4, '0'));
-  return negative ? -amount : amount;
-}
-
-function decimal(value) {
-  const absolute = value < 0n ? -value : value;
-  return `${value < 0n ? '-' : ''}${absolute / 10000n}.${String(absolute % 10000n).padStart(4, '0')}`;
-}
 
 function newTotals() {
   return additiveUnits.map((unit) => ({ unit, estimated: 0n, actual: 0n, benefitCount: 0 }));
@@ -21,8 +9,8 @@ function newTotals() {
 function add(totals, row) {
   const total = totals.find(({ unit }) => unit === row.unit);
   if (!total) return;
-  total.estimated += scaled(row.estimated);
-  total.actual += scaled(row.actual);
+  total.estimated += scaled(row.estimated) ?? 0n;
+  total.actual += scaled(row.actual) ?? 0n;
   total.benefitCount += 1;
 }
 
@@ -37,10 +25,15 @@ export function aggregateBenefits(rows, completedProjects = 0) {
   const projects = new Map();
   const categories = new Map();
   const totals = newTotals();
+  const missingValues = [];
   for (const row of rows) {
     // Identity, not amount, defines a record. Equal values can be legitimate.
     if (seen.has(row.id)) continue;
     seen.add(row.id);
+    if (row.estimated === null || row.actual === null) missingValues.push({
+      id: row.id, projectId: row.project_id, unit: row.unit,
+      estimatedMissing: row.estimated === null, actualMissing: row.actual === null
+    });
     if (!projects.has(row.project_id)) {
       projects.set(row.project_id, {
         projectId: row.project_id, project: row.project_title, benefitCount: 0,
@@ -72,6 +65,7 @@ export function aggregateBenefits(rows, completedProjects = 0) {
     totals: outputTotals(totals),
     projects: [...projects.values()].sort((a, b) => a.projectId.localeCompare(b.projectId))
       .map((project) => ({ ...project, totals: outputTotals(project.totals) })),
+    ...(missingValues.length ? { missingValues } : {}),
     message: seen.size === 0 ? 'No benefits have been recorded yet.' : null
   };
 }

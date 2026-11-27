@@ -18,7 +18,7 @@ test('a suggestion keeps one allowed category, unit and a four-decimal estimate'
   assert.equal(normaliseSuggestion({ ...draft, description: '   ' }), undefined);
 });
 
-test('the OpenAI request uses the server key and returns the draft unchanged in shape', async () => {
+test('the Gemini request uses the server key and returns the draft unchanged in shape', async () => {
   let seen;
   const suggestion = await requestBenefitSuggestion({
     title: 'Room bookings',
@@ -28,18 +28,23 @@ test('the OpenAI request uses the server key and returns the draft unchanged in 
     expectedBenefits: 'Save about 4.5 hours a month.'
   }, {
     apiKey: 'test-key',
-    model: 'test-model',
+    model: 'gemini-3.5-flash-lite',
     fetchImpl: async (url, init) => {
       seen = { url, init };
       return new Response(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify(draft) } }]
+        candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(draft) }] } }]
       }), { status: 200 });
     }
   });
 
-  assert.equal(seen.url, 'https://api.openai.com/v1/chat/completions');
-  assert.equal(seen.init.headers.Authorization, 'Bearer test-key');
-  assert.equal(JSON.parse(seen.init.body).model, 'test-model');
+  assert.equal(seen.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent');
+  assert.equal(seen.init.headers['x-goog-api-key'], 'test-key');
+  assert.equal(seen.init.headers.Authorization, undefined);
+  const body = JSON.parse(seen.init.body);
+  assert.equal(body.generationConfig.maxOutputTokens, 1024);
+  assert.equal(body.generationConfig.responseMimeType, 'application/json');
+  assert.equal(JSON.stringify(body).includes('test-key'), false);
+  assert.equal(JSON.parse(body.contents[0].parts[0].text).title, 'Room bookings');
   assert.deepEqual(suggestion, draft);
 });
 

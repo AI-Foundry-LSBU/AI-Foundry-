@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Gauge,
   History,
+  Library,
   LogOut,
   Menu,
   Network,
@@ -29,7 +30,8 @@ const managementNav = [
   { to: "/opportunities", label: "All Opportunities", icon: ClipboardList },
   { to: "/pipeline", label: "Project Delivery", icon: BriefcaseBusiness },
   { to: "/history", label: "History", icon: History },
-  { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 }
+  { to: "/benefits", label: "Benefits Reporting", icon: BarChart3 },
+  { to: "/catalogue", label: "Solution Catalogue", icon: Library }
 ];
 const engineerNav = [
   { to: "/dashboard", label: "Delivery Dashboard", icon: Gauge },
@@ -56,6 +58,7 @@ function pageTitle(pathname, role) {
   if (section === "history") return "History";
   if (section === "projects") return "Project Details";
   if (section === "benefits") return "Benefits Reporting";
+  if (section === "catalogue") return "Solution Catalogue";
   return "AI Foundry";
 }
 function Layout() {

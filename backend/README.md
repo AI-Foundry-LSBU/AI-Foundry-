@@ -568,3 +568,116 @@ The visibility rule applies in SQL before list filtering and pagination. Staff
 ownership and manager-only write rules are checked by the backend even if a
 caller bypasses the website. Academic and non-academic staff share the Staff
 permission role; this version does not verify university employment categories.
+## Existing-solution catalogue (US10)
+
+Run `npm run db:migrate` from `backend/` after updating. Migration 017 imports
+the six prototype service examples as **unverified drafts**. They are not new
+claims that those services or their features have been checked. A manager must
+review the current service information/access route before explicitly verifying
+an entry. Migration reruns preserve saved edits and verification states.
+
+The API uses the existing session cookie and CSRF token:
+
+| Endpoint | Access | Purpose |
+| --- | --- | --- |
+| `GET /api/v1/solutions?q=room&limit=20` | Signed-in users | Search active, verified, accessible records only. |
+| `GET /api/v1/solutions/catalogue?state=draft` | Manager | Inspect drafts, verified entries or archived entries; `state=all` is the default. |
+| `POST /api/v1/solutions/catalogue` | Manager + CSRF | Create a catalogue entry. |
+| `PUT /api/v1/solutions/catalogue/:id` | Manager + CSRF | Replace the full editable record, verify/unverify it, or archive it with `active=false`. |
+
+Editable fields are `name`, `description`, `keywords` (up to 20), `href`
+(HTTPS only), `accessInstructions`, `visibility` (`all_users` or `manager_only`),
+`active`, `verified`, and `verificationNotes`. A link or access instructions are
+required. Setting `verified=true` requires an explanation of the verification;
+the server records the manager ID and verification date. Editing content without
+explicitly setting `verified=true` withdraws it until checked again. PUT resets
+omitted optional fields to their defaults; it is not a partial update.
+
+Staff and engineers cannot read manager-only catalogue entries or management
+metadata. Search filtering takes place in PostgreSQL. No catalogue management
+screen is included; use an authenticated API client for these endpoints.
+
+### Chatbot integration: Gemini for private experiments
+
+`POST /api/v1/solutions/check` accepts `{ "text": "Book a meeting room" }` and
+optional `previousMessages`: up to eight `{ "role": "user" | "assistant",
+"text": "..." }` records. Text/messages are limited to 800 characters each.
+Responses contain `decision` (`match`, `none`, `clarify`, `help`, or `unavailable`),
+`question`, `matches`, `message`, and `canSubmit: true`. Matches include the
+current catalogue name, description, reason, HTTPS link or access instructions.
+The browser no longer contains its own list of six services. Reviewed application
+help answers submission/tracking and other usage questions without an AI call.
+Submission help provides an Open opportunity form action. It does not retrieve
+private records or change application data.
+
+The checker searches accessible verified entries, supplies at most eight
+candidates to Gemini and accepts at most three returned candidate IDs. Unknown
+IDs are discarded. Links and access instructions come from PostgreSQL, never
+from the model. Entries changed, archived, unverified or restricted during an
+AI call are discarded before the reply. Search is bounded; a no-match response
+is not a claim that no solution exists anywhere at LSBU.
+
+**Agreed scope: private developer experiments, with Google billing disabled.**
+Google's current terms require Paid Services when making an API client available
+to UK users. This setup must not be described as a free deployment option for
+an LSBU-facing website. This adapter returns unavailable in production mode.
+See [ChatBot-setup.md](ChatBot-setup.md) and [Google's terms](https://ai.google.dev/gemini-api/terms).
+
+Create a key in [Google AI Studio](https://aistudio.google.com/api-keys), using a
+project that displays **Free tier** and has no linked billing account. Configure
+only the private backend/.env:
+
+```dotenv
+GEMINI_API_KEY=your-own-private-key
+GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+The default model is Gemini 3.5 Flash-Lite; Gemini 3.1 Flash-Lite is also allowed.
+Both have a published free tier as checked on 26 November 2026. Other model
+names are rejected before a request. **The application cannot determine whether
+your Google project has billing enabled.** Model selection does not force free
+billing if the key belongs to a paid project. Do not enable billing or upgrade
+for these experiments. Eligibility, model availability and quota are controlled
+by Google and must be checked in your own account.
+
+Requests use Google's generateContent endpoint, a server-only x-goog-api-key
+header, JSON Schema output, a 20-second timeout, minimal thinking and a
+1,024-token output cap for catalogue checks and benefit suggestions; reviews
+have a 4,096-token cap. No Google Search tools, other paid tools, fallback models
+or automatic retries in the provider adapter are enabled. There is no fallback
+to another provider. An exhausted Google quota returns a safe 503 response and staff can still submit an opportunity.
+No new package or database migration is needed for this provider change.
+
+All external AI features now use the shared `src/ai/gemini.js` adapter: catalogue
+checks, benefit suggestions and opportunity benefit reviews. Their settings are
+GEMINI_API_KEY and GEMINI_MODEL; retired OpenAI variables can be removed.
+The private-only production guard applies to all three. Existing saved reviews
+are retained. Manual submission and benefit recording remain available on AI
+failure. See [ChatBot-setup.md](ChatBot-setup.md) for workflows, data sent to the
+provider, catalogue management, application help and testing.
+
+The route allows 20 checks per signed-in account per five minutes, using an
+in-memory limiter for the single-process prototype. Multiple API replicas would
+need a shared limiter store. This feature saves no conversation transcript.
+Eligible catalogue descriptions/keywords and bounded chat context are sent to
+Google; verification metadata, access links and API credentials are not part
+of the prompt. Use synthetic coursework examples for these experiments and
+review Google's data-use terms. No zero-retention guarantee is made.
+
+On missing configuration or unsupported/production configuration (503), provider
+error/refusal/invalid output/timeout (502), provider quota exhaustion (503), or
+local route rate limiting (429), responses expose no provider details or keys
+and retain canSubmit=true. The frontend keeps Submit anyway available. Ordinary
+submission never requires a chatbot result. Restart cancels the browser request
+and ignores late responses.
+
+Run backend checks with npm test and TEST_DATABASE_URL set as described above.
+From frontend/, run npm test and npm run build. Provider responses in automated
+tests are simulated; no real Google key/quota/model response has been verified.
+
+## US11: completed-project benefits over time
+
+Managers can request `GET /api/v1/benefits/report` with date, period and project
+filters. Apply migration 018 before starting the updated API. See
+[US11-reporting.md](US11-reporting.md) for recurrence rules, missing-value handling,
+setup and the frontend handoff. The US11 report page is a separate frontend task.
