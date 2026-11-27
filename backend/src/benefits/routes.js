@@ -1,8 +1,10 @@
 import express from 'express';
 import { requireRole } from '../middleware/requireRole.js';
-import { benefitSummaryRecords, findBenefit, insertBenefit, listBenefits, replaceBenefit } from './queries.js';
+import { benefitSummaryRecords, benefitReportingRecords, findBenefit, insertBenefit, listBenefits, replaceBenefit } from './queries.js';
 import { aggregateBenefits } from './summary.js';
 import { uuidPattern, validateBenefit } from './validation.js';
+import { validateReportQuery } from './report-dates.js';
+import { aggregateBenefitsOverTime } from './report.js';
 
 function benefitResponse(row) {
   return {
@@ -36,11 +38,22 @@ function invalid(res, fields) {
   });
 }
 
-export function benefitRoutes(pool) {
+export function benefitRoutes(pool, options = {}) {
   const router = express.Router();
   const read = requireRole('manager', 'team');
   const write = requireRole('manager');
   const json = express.json({ limit: '64kb' });
+
+  router.get('/benefits/report', requireRole('manager'), async (req, res) => {
+    const asOf = options.reportToday?.() ?? new Date().toISOString().slice(0, 10);
+    const { data, fields } = validateReportQuery(req.query, asOf);
+    if (Object.keys(fields).length) return res.status(400).json({
+      code: 'VALIDATION_ERROR', message: 'Check the report filters.', fields
+    });
+    const records = await benefitReportingRecords(pool, data.projectId);
+    if (!records.project_exists) return res.status(404).json({ code: 'NOT_FOUND', message: 'Project not found.' });
+    return res.json(aggregateBenefitsOverTime(records, data));
+  });
 
   // Register before /benefits/:id so "summary" is not treated as a benefit ID.
   router.get('/benefits/summary', requireRole('manager'), async (req, res) => {

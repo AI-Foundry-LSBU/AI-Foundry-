@@ -674,3 +674,10 @@ and ignores late responses.
 Run backend checks with npm test and TEST_DATABASE_URL set as described above.
 From frontend/, run npm test and npm run build. Provider responses in automated
 tests are simulated; no real Google key/quota/model response has been verified.
+
+## US11: completed-project benefits over time
+
+Managers can request `GET /api/v1/benefits/report` with date, period and project
+filters. Apply migration 018 before starting the updated API. See
+[US11-reporting.md](US11-reporting.md) for recurrence rules, missing-value handling,
+setup and the frontend handoff. The US11 report page is a separate frontend task.

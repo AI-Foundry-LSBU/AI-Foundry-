@@ -26,6 +26,8 @@ info:
     US10 stores existing solutions in a manager-controlled catalogue and grounds
     the pre-submission chatbot in verified, active, accessible catalogue results.
     The chatbot never prevents submission, including after a recommendation or failure.
+    US11 adds completed-project reporting with dated recognition rules. Its report
+    page and recurrence controls require separate frontend integration.
     Recognised application-usage questions use reviewed, role-aware server help.
     All external AI calls (catalogue checking, benefit suggestions and opportunity
     benefit reviews) use the shared server-side Gemini configuration for private
@@ -67,7 +69,7 @@ tags:
   - name: Delivery
     description: Tracking project delivery (US04)
   - name: Benefits
-    description: Recording project benefits (US05) and benefits summary data (US07)
+    description: Recording project benefits (US05), snapshot summaries (US07) and dated completed-project reporting (US11)
   - name: History
     description: Read-only opportunity and linked delivery timeline (US08)
   - name: Notifications
@@ -1165,6 +1167,90 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /benefits/report:
+    get:
+      tags:
+      - Benefits
+      operationId: getBenefitsOverTime
+      summary: Completed-project benefits over time (US11)
+      description: 'Manager only. Reads current records in one database snapshot; returns Cache-Control:
+        no-store. Cookie-session GET needs no CSRF token. All dates and periods use UTC calendar dates.
+        Supply both from/to or neither (default: year to date); maximum 120 calendar months. Empty buckets
+        are retained.
+
+
+        Only currently completed projects with a reliable completion date on or before min(to, server asOf)
+        contribute. completedProjectCount counts completions inside the window; completedProjectsToDate
+        includes earlier completions. Earlier completed projects may contribute benefits dated inside the
+        window. Undated legacy completions are flagged, never assigned a guessed date.
+
+
+        Each benefit ID is read once. one_off recognises its amount once on date. monthly/yearly recognise
+        the same entered amount at each original-date anniversary through inclusive recursUntil; shorter
+        months clamp the day without changing the original anchor. No prorating or annual-to-monthly allocation.
+        Occurrences before completion are excluded; the original recurrence anchor is retained. unspecified
+        records are excluded and flagged. Updating a current record recalculates prior periods; this is
+        not a historical snapshot archive.
+
+
+        Hours/month, GBP/year and Cases/month become recognised Hours, GBP and Cases respectively, in separate
+        totals. Percent and Days remain individual measures. Values are exact four-place decimal strings.
+        Missing values and future actual occurrences are null, never confirmed zero. Partially known totals
+        are marked incomplete with known/missing occurrence counts. Different saved IDs are assumed to represent
+        independent outcomes; overlapping real-world savings require correction in the source records.'
+      parameters:
+      - name: from
+        in: query
+        description: Inclusive YYYY-MM-DD start; requires to. Defaults to 1 January of the current UTC year.
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        description: Inclusive YYYY-MM-DD end; requires from. Defaults to today in UTC. Future estimates
+          are allowed; future actuals are withheld.
+        schema:
+          type: string
+          format: date
+      - name: period
+        in: query
+        description: Calendar bucket size; partial first/last buckets are clipped to the window.
+        schema:
+          type: string
+          enum:
+          - month
+          - quarter
+          - year
+          default: month
+      - name: projectId
+        in: query
+        description: Optional single-project filter. An existing unfinished project gives an empty report,
+          not a status bypass.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Completed-project counts, dated benefit totals, period series and project breakdowns,
+            including explicit missing-data flags.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenefitsTimeReport'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+
 components:
   securitySchemes:
     cookieSession:
@@ -2033,6 +2119,342 @@ components:
             updatedAt:
               type: string
               format: date-time
+
+    BenefitsTimeReport:
+      type: object
+      required:
+      - filters
+      - asOf
+      - completedProjectCount
+      - completedProjectsToDate
+      - projectCount
+      - benefitCount
+      - occurrenceCount
+      - totals
+      - series
+      - projects
+      - missingEstimatedCount
+      - missingActualCount
+      - futureActualCount
+      - incomplete
+      - exclusions
+      - message
+      properties:
+        filters:
+          type: object
+          required:
+          - from
+          - to
+          - period
+          - projectId
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+            period:
+              type: string
+              enum:
+              - month
+              - quarter
+              - year
+            projectId:
+              type: string
+              format: uuid
+              nullable: true
+        asOf:
+          type: string
+          format: date
+          description: Server UTC date. Not a caller-controlled filter. Future actual occurrences are withheld.
+        completedProjectCount: &id007
+          type: integer
+          minimum: 0
+          description: New completions inside this reporting window, not all previously completed projects.
+        completedProjectsToDate: &id008
+          type: integer
+          minimum: 0
+          description: Current completed projects with a reliable completion date on/before min(window end, server asOf).
+        projectCount:
+          type: integer
+          minimum: 0
+          description: 'Breakdown projects: completed in the window OR with recognised benefits in the window.'
+        benefitCount:
+          type: integer
+          minimum: 0
+          description: Distinct recognised benefit IDs across the portfolio; a recurring ID is counted once.
+        occurrenceCount:
+          type: integer
+          minimum: 0
+          description: All recognised occurrences across all units, including unknown measurements.
+        totals:
+          $ref: '#/components/schemas/TimeReportTotals'
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeReportPeriod'
+          description: Chronological, including empty periods. Per-period completedProjectsToDate is a stock count,
+            not additive.
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeReportProject'
+          description: Ordered by project ID. Current completed projects only. Earlier completions without in-window
+            recognitions affect the stock count but do not appear here.
+        missingEstimatedCount:
+          type: integer
+          minimum: 0
+          description: Occurrences with missing estimates across all units, including individual Percent/Days measures.
+        missingActualCount:
+          type: integer
+          minimum: 0
+          description: Occurrences with missing actuals across all units, including future occurrences.
+        futureActualCount:
+          type: integer
+          minimum: 0
+          description: Future occurrences whose stored actual was masked to null.
+        incomplete:
+          type: boolean
+          description: Missing measurements, unclassified recurrence or undated completed projects prevent a complete
+            report.
+        exclusions:
+          type: object
+          required:
+          - undatedCompletedProjects
+          - unclassifiedBenefits
+          - beforeCompletionBenefits
+          properties:
+            undatedCompletedProjects:
+              type: array
+              items:
+                type: object
+                required:
+                - projectId
+                - project
+                properties:
+                  projectId:
+                    type: string
+                    format: uuid
+                  project:
+                    type: string
+            unclassifiedBenefits:
+              type: array
+              items:
+                $ref: '#/components/schemas/TimeReportBenefitReference'
+            beforeCompletionBenefits:
+              type: array
+              items:
+                $ref: '#/components/schemas/TimeReportBenefitReference'
+          description: Rows excluded from dated recognition. Undated completions cannot be assigned to a selected period.
+            Unclassified benefits dated on/before to are reported even if their first date precedes from, because recurrence
+            has not been established.
+        message:
+          type: string
+          nullable: true
+          description: Empty-data or classification guidance, otherwise null. Check incomplete/exclusions even when
+            message is null.
+    TimeReportUnitTotal:
+      type: object
+      required:
+      - unit
+      - sourceUnit
+      - estimated
+      - actual
+      - benefitCount
+      - occurrenceCount
+      - estimatedKnownCount
+      - actualKnownCount
+      - missingEstimatedCount
+      - missingActualCount
+      - estimatedComplete
+      - actualComplete
+      properties:
+        unit:
+          type: string
+          enum:
+          - Hours
+          - GBP
+          - Cases
+        sourceUnit:
+          type: string
+          enum:
+          - Hours/month
+          - GBP/year
+          - Cases/month
+        estimated:
+          $ref: '#/components/schemas/NullableBenefitDecimal'
+        actual:
+          $ref: '#/components/schemas/NullableBenefitDecimal'
+        benefitCount:
+          type: integer
+          minimum: 0
+          description: Distinct saved benefit IDs contributing to this unit.
+        occurrenceCount:
+          type: integer
+          minimum: 0
+          description: Scheduled recognitions, including entries with unknown values.
+        estimatedKnownCount:
+          type: integer
+          minimum: 0
+        actualKnownCount:
+          type: integer
+          minimum: 0
+        missingEstimatedCount:
+          type: integer
+          minimum: 0
+        missingActualCount:
+          type: integer
+          minimum: 0
+        estimatedComplete:
+          type: boolean
+          description: True only when at least one occurrence exists and all estimated values are known.
+        actualComplete:
+          type: boolean
+          description: True only when at least one occurrence exists and all actual values are known and not future-dated.
+    TimeReportTotals:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items:
+        $ref: '#/components/schemas/TimeReportUnitTotal'
+      description: Hours, GBP and Cases, in that order. Never add these units together. Values are null when no known
+        occurrences exist; otherwise they are known-value subtotals, with completeness flags.
+    TimeReportBenefitReference:
+      type: object
+      required:
+      - id
+      - projectId
+      - project
+      - description
+      - measurement
+      - unit
+      - date
+      properties:
+        id: &id001
+          type: string
+          format: uuid
+        projectId: &id002
+          type: string
+          format: uuid
+        project: &id003
+          type: string
+        description: &id004
+          type: string
+        measurement: &id005
+          type: string
+        unit:
+          type: string
+          enum:
+          - Hours/month
+          - GBP/year
+          - Cases/month
+          - Percent
+          - Days
+        date: &id006
+          type: string
+          format: date
+    TimeReportIndividualBenefit:
+      type: object
+      required:
+      - id
+      - projectId
+      - project
+      - description
+      - measurement
+      - unit
+      - date
+      - estimated
+      - actual
+      properties:
+        id: *id001
+        projectId: *id002
+        project: *id003
+        description: *id004
+        measurement: *id005
+        unit:
+          type: string
+          enum:
+          - Percent
+          - Days
+        date: *id006
+        estimated:
+          $ref: '#/components/schemas/NullableBenefitDecimal'
+        actual:
+          $ref: '#/components/schemas/NullableBenefitDecimal'
+      description: Percent/Days values are individual comparisons, never sums or averages. Sorted by date and benefit
+        ID.
+    TimeReportPeriod:
+      type: object
+      required:
+      - period
+      - from
+      - to
+      - completedProjectCount
+      - completedProjectsToDate
+      - benefitCount
+      - occurrenceCount
+      - totals
+      - nonAdditiveBenefits
+      properties:
+        period:
+          type: string
+          description: YYYY-MM, YYYY-Qn or YYYY, according to the selected bucket size.
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        completedProjectCount: *id007
+        completedProjectsToDate: *id008
+        benefitCount:
+          type: integer
+          minimum: 0
+          description: Distinct recognised benefit IDs within this bucket; do not sum these counts across buckets.
+        occurrenceCount:
+          type: integer
+          minimum: 0
+        totals:
+          $ref: '#/components/schemas/TimeReportTotals'
+        nonAdditiveBenefits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeReportIndividualBenefit'
+    TimeReportProject:
+      type: object
+      required:
+      - projectId
+      - project
+      - completedOn
+      - completedInWindow
+      - benefitCount
+      - occurrenceCount
+      - totals
+      - nonAdditiveBenefits
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        project:
+          type: string
+        completedOn:
+          type: string
+          format: date
+        completedInWindow:
+          type: boolean
+        benefitCount:
+          type: integer
+          minimum: 0
+        occurrenceCount:
+          type: integer
+          minimum: 0
+        totals:
+          $ref: '#/components/schemas/TimeReportTotals'
+        nonAdditiveBenefits:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeReportIndividualBenefit'
 
     BenefitsSummary:
       type: object

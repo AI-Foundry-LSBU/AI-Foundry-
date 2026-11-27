@@ -21,6 +21,32 @@ export async function benefitSummaryRecords(pool) {
   return result;
 }
 
+export async function benefitReportingRecords(pool, projectId) {
+  // All inputs come from one snapshot. Both joins are one-to-one. Progress
+  // notes/history must not be joined here or each benefit could be multiplied.
+  const { rows: [result] } = await pool.query(`
+    WITH completed AS (
+      SELECT p.id, p.status, o.title AS project,
+        (p.completed_at AT TIME ZONE 'UTC')::date::text AS completed_on
+      FROM projects p JOIN opportunities o ON o.id = p.opportunity_id
+      WHERE p.status = 'completed' AND ($1::uuid IS NULL OR p.id = $1)
+    )
+    SELECT
+      ($1::uuid IS NULL OR EXISTS (SELECT 1 FROM projects WHERE id = $1)) AS project_exists,
+      COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM completed p), '[]'::jsonb) AS projects,
+      COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', b.id, 'project_id', b.project_id, 'category', b.category,
+          'description', b.description, 'measurement', b.measurement,
+          'estimated', b.estimated::text, 'actual', b.actual::text,
+          'unit', b.unit, 'date', b.recorded_on::text,
+          'recurrence', b.recurrence, 'recurs_until', b.recurs_until::text
+        ) ORDER BY b.id)
+        FROM project_benefits b JOIN completed p ON p.id = b.project_id
+      ), '[]'::jsonb) AS benefits`, [projectId ?? null]);
+  return result;
+}
+
 export async function listBenefits(pool, projectId) {
   const { rows } = await pool.query(
     `${benefitSelect}
