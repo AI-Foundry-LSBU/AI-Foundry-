@@ -4197,29 +4197,48 @@ button.project-progress {
   }
 }
 
-/* Search, status filters and department filters each get their own space. */
+/* Search, then status tabs, then department and priority, each on its own row. */
 .opportunity-query {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
 }
 
-.opportunity-query .work-search {
-  order: 1;
-  flex: 1 1 240px;
-  width: auto;
-  min-width: min(100%, 240px);
+.opportunity-query .work-search,
+.opportunity-query .status-tabs,
+.opportunity-query .query-selects {
+  order: 0;
+  flex: none;
+  width: 100%;
+  min-width: 0;
 }
 
 .opportunity-query .query-selects {
-  order: 2;
-  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-end;
+  justify-content: flex-start;
+  gap: 16px;
 }
 
-.opportunity-query .status-tabs {
-  order: 3;
-  flex: 1 0 100%;
-  width: 100%;
+.opportunity-query .query-selects > svg {
+  display: none;
+}
+
+.opportunity-query .query-selects select {
+  min-width: 180px;
+}
+
+@media (max-width: 768px) {
+  .opportunity-query .query-selects {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .opportunity-query .query-selects select {
+    width: 100%;
+    max-width: none;
+  }
 }
