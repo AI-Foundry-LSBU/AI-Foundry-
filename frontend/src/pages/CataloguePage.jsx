@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
@@ -184,6 +184,9 @@ export function CataloguePage() {
   const [state, setState] = useState("all");
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
+  const fullList = useRef([]);
+  const fullTotal = useRef(0);
+  const fullState = useRef("all");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);
@@ -198,6 +201,11 @@ export function CataloguePage() {
       try {
         const page = await listCatalogue(currentUser.email, { q: query.trim(), state, signal: controller.signal });
         if (cancelled) return;
+        if (!query.trim()) {
+          fullList.current = page.items;
+          fullTotal.current = page.total;
+          fullState.current = state;
+        }
         setEntries(page.items);
         setTotal(page.total);
         setError(null);
@@ -223,7 +231,16 @@ export function CataloguePage() {
     action={<Button onClick={() => navigate("/dashboard")}>Dashboard</Button>}
   />;
   const openNew = () => setEditing("new");
-  const narrowed = query.trim() !== "" || state !== "all";
+  const needle = query.trim().toLowerCase();
+  const catalogueComplete = fullState.current === state && fullList.current.length > 0 && fullList.current.length === fullTotal.current;
+  const shown = !needle ? entries : (catalogueComplete ? fullList.current : entries).filter((entry) => {
+    const haystack = [entry.name, entry.description, ...(entry.keywords ?? [])].join("\n").toLowerCase();
+    const nameTokens = [entry.name, ...(entry.keywords ?? [])].join("\n").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+    return needle.split(/\s+/).every((word) => word.length < 3
+      ? nameTokens.some((token) => token.startsWith(word))
+      : haystack.includes(word));
+  });
+  const narrowed = needle !== "" || state !== "all";
   const states = [
     ["all", "All"],
     ["verified", "Verified"],
@@ -257,7 +274,7 @@ export function CataloguePage() {
       </div>
       {loading || (pending && entries.length === 0) ? <div role="status"><EmptyState title="Loading the catalogue…" /></div> : error ? <div role="alert">
         <EmptyState title="Could not load the catalogue" text={error.message} action={<Button onClick={() => setVersion((item) => item + 1)}>Try again</Button>} />
-      </div> : entries.length === 0 ? <EmptyState
+      </div> : shown.length === 0 ? <EmptyState
         title={narrowed ? "Nothing matches" : "No solutions yet"}
         text={narrowed ? "Try another search, or show every state." : "Add a service, check how to reach it, then mark it verified."}
         action={narrowed ? <Button variant="secondary" onClick={() => { setQuery(""); setState("all"); }}>Show all</Button> : <Button onClick={openNew}>Add a solution</Button>}
@@ -274,7 +291,7 @@ export function CataloguePage() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry) => <tr key={entry.id}>
+              {shown.map((entry) => <tr key={entry.id}>
                 <td>
                   <div className="title-cell">
                     <strong>{entry.name}</strong>
@@ -292,9 +309,11 @@ export function CataloguePage() {
           </table>
         </div>
         <p className="list-foot">
-          {entries.length === total
+          {needle && catalogueComplete
+            ? `${shown.length} ${shown.length === 1 ? "solution" : "solutions"}`
+            : entries.length === total
             ? `${total} ${total === 1 ? "solution" : "solutions"}`
-            : `Showing ${entries.length} of ${total}. Search to narrow the list.`}
+            : `Showing ${shown.length} of ${total}. Search to narrow the list.`}
         </p>
       </>}
     </Card>

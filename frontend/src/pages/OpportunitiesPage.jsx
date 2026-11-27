@@ -3,7 +3,7 @@ import {
   Filter,
   Search
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { getOpportunityDisplayStatus } from "../data/opportunitiesApi";
 import { departments, opportunityStatuses } from "../data/options";
@@ -20,6 +20,7 @@ import {
 export function OpportunitiesPage() {
   const { currentUser, role, opportunities } = useApp();
   const navigate = useNavigate();
+  const completedOnly = useLocation().pathname === "/completed";
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
   const [department, setDepartment] = useState("All");
@@ -42,8 +43,11 @@ export function OpportunitiesPage() {
 
   const statusOptions = ["All", ...opportunityStatuses];
   if (useLiveList) statusOptions.push("In Progress", "Testing");
+  if (completedOnly && !isStaff) return <Navigate to="/history" replace />;
   const scoped = (useLiveList ? live.data : opportunities.filter((item) => !isEngineer || item.status === "Approved"))
-    .filter((item) => isStaff || getOpportunityDisplayStatus(item) !== "Completed");
+    .filter((item) => completedOnly
+      ? getOpportunityDisplayStatus(item) === "Completed"
+      : isStaff || getOpportunityDisplayStatus(item) !== "Completed");
   const departmentOptions = Array.from(new Set([
     ...departments, ...scoped.map((item) => item.department),
   ])).sort((a, b) => a.localeCompare(b));
@@ -76,14 +80,17 @@ export function OpportunitiesPage() {
       <section className="opportunity-masthead">
         <div className="masthead-copy">
           <h1>
-            {isStaff ? "My Opportunities" : isEngineer ? "Approved Opportunities" : "All Opportunities"}
+            {completedOnly ? "Completed" : isStaff ? "My Opportunities" : isEngineer ? "Approved Opportunities" : "All Opportunities"}
           </h1>
           <p>
-            {isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Assign an approved opportunity to yourself. It then appears in Project Delivery." : "Review, prioritise and progress opportunities from across LSBU."}
+            {completedOnly ? "Your opportunities that have been delivered. Their status cannot be changed." : isStaff ? "Your submitted opportunities, review decisions and delivery progress." : isEngineer ? "Assign an approved opportunity to yourself. It then appears in Project Delivery." : "Review, prioritise and progress opportunities from across LSBU."}
           </p>
         </div>
         <div className="masthead-ledger">
-          {isEngineer ? <div>
+          {completedOnly ? <div>
+              <strong>{scoped.length}</strong>
+              <span>Completed opportunities</span>
+            </div> : isEngineer ? <div>
               <strong>{scoped.length}</strong>
               <span>Approved opportunities</span>
             </div> : <>
@@ -116,7 +123,7 @@ export function OpportunitiesPage() {
     placeholder="Search title, department or ID"
   />
         </label>
-        {!isEngineer && <div className="status-tabs" aria-label="Filter by status">
+        {!isEngineer && !completedOnly && <div className="status-tabs" aria-label="Filter by status">
           {statusOptions.map((item) => <button
     key={item}
     className={status === item ? "active" : ""}
@@ -218,8 +225,8 @@ export function OpportunitiesPage() {
           {listFoot}
         </section> : <div className="worklist-empty">
           <EmptyState
-    title={useLiveList && !scoped.length ? (isEngineer ? "No approved opportunities yet" : "No opportunities yet") : "No opportunities in this view"}
-    text={useLiveList && !scoped.length ? (isStaff ? "Submit an opportunity and it will appear here." : isEngineer ? "Opportunities appear here once a manager approves them." : "Submitted opportunities will appear here.") : "Adjust the search or filters to return to the opportunity queue."}
+    title={completedOnly && !scoped.length ? "No completed opportunities yet" : useLiveList && !scoped.length ? (isEngineer ? "No approved opportunities yet" : "No opportunities yet") : "No opportunities in this view"}
+    text={completedOnly && !scoped.length ? "An opportunity appears here once its delivery is completed." : useLiveList && !scoped.length ? (isStaff ? "Submit an opportunity and it will appear here." : isEngineer ? "Opportunities appear here once a manager approves them." : "Submitted opportunities will appear here.") : "Adjust the search or filters to return to the opportunity queue."}
   />
           {listFoot}
         </div>}

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BriefcaseBusiness,
+  CheckCircle2,
   ClipboardList,
   Gauge,
   History,
@@ -23,6 +24,7 @@ import { AccountNotices } from "../components/AccountNotices";
 import { useApp } from "../context/AppContext";
 const staffNav = [
   { to: "/opportunities", label: "My Opportunities", icon: ClipboardList },
+  { to: "/completed", label: "Completed", icon: CheckCircle2 },
   { to: "/submit", label: "Submit Opportunity", icon: PlusCircle }
 ];
 const managementNav = [
@@ -48,6 +50,7 @@ function pageTitle(pathname, role) {
     return "Dashboard";
   }
   if (section === "submit") return "Submit an Opportunity";
+  if (section === "completed") return "Completed";
   if (section === "opportunities") {
     if (id) return "Opportunity";
     if (role === "Staff") return "My Opportunities";
@@ -74,7 +77,7 @@ function Layout() {
   const user = currentUser;
   const currentTitle = pageTitle(location.pathname, role);
   if (!isAuthenticated) return <Navigate to="/signin" replace />;
-  if (isStaff && !location.pathname.startsWith('/opportunities') && location.pathname !== '/submit') {
+  if (isStaff && !location.pathname.startsWith('/opportunities') && location.pathname !== '/submit' && location.pathname !== '/completed') {
     return <Navigate to="/opportunities" replace />;
   }
   return <div className="app-shell">

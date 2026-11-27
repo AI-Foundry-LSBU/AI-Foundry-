@@ -114,7 +114,7 @@ export function PipelinePage() {
                         </div>
                         <div className="project-card-meta">
                           <PriorityBadge priority={project.priority} />
-                          <span>Target {project.targetDate}</span>
+                          <span>{project.targetDate === "Not scheduled" ? "No target date" : `Target ${project.targetDate}`}</span>
                         </div>
                       </button>
                       {!delivery.isLive && <select
